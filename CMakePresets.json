@@ -1,0 +1,58 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 23, "patch": 0 },
+
+  "configurePresets": [
+    {
+      "name": "_ios-base",
+      "hidden": true,
+      "generator": "Xcode",
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME":    "iOS",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../3rdparty/vcpkg/scripts/buildsystems/vcpkg.cmake",
+        "BUILD_HKP_SAUCER":    "OFF",
+        "ENABLE_FFMPEG":       "OFF",
+        "BUILD_TESTING":       "OFF"
+      }
+    },
+    {
+      "name": "ios-device",
+      "displayName": "iOS device (arm64)",
+      "description": "Build for a physical iPhone/iPad",
+      "inherits": "_ios-base",
+      "binaryDir": "${sourceDir}/../build/meander-ios-device",
+      "cacheVariables": {
+        "CMAKE_OSX_SYSROOT":          "iphoneos",
+        "CMAKE_OSX_ARCHITECTURES":    "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "16.0",
+        "VCPKG_TARGET_TRIPLET":        "arm64-ios"
+      }
+    },
+    {
+      "name": "ios-simulator",
+      "displayName": "iOS Simulator (arm64, Apple Silicon)",
+      "description": "Build for the Xcode iOS Simulator on Apple Silicon",
+      "inherits": "_ios-base",
+      "binaryDir": "${sourceDir}/../build/meander-ios-simulator",
+      "cacheVariables": {
+        "CMAKE_OSX_SYSROOT":           "iphonesimulator",
+        "CMAKE_OSX_ARCHITECTURES":     "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "16.0",
+        "VCPKG_TARGET_TRIPLET":        "arm64-ios-simulator"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    {
+      "name": "ios-device",
+      "configurePreset": "ios-device",
+      "configuration": "Release"
+    },
+    {
+      "name": "ios-simulator",
+      "configurePreset": "ios-simulator",
+      "configuration": "Debug"
+    }
+  ]
+}

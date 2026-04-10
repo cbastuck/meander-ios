@@ -1,0 +1,332 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00100010000000000000001 /* MeanderIOSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000001 /* MeanderIOSApp.swift */; };
+		A00100010000000000000002 /* BoardListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000002 /* BoardListView.swift */; };
+		A00100010000000000000003 /* BoardListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000003 /* BoardListViewModel.swift */; };
+		A00100010000000000000004 /* BoardDraft.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000004 /* BoardDraft.swift */; };
+		A00100010000000000000005 /* Remote.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000005 /* Remote.swift */; };
+		A00100010000000000000006 /* MeanderAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000006 /* MeanderAPIClient.swift */; };
+		A00100010000000000000007 /* WebApp in Resources */ = {isa = PBXBuildFile; fileRef = A00200010000000000000009 /* WebApp */; };
+		A00100010000000000000008 /* HKPRuntimeHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = A0020001000000000000000B /* HKPRuntimeHost.mm */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A00200010000000000000001 /* MeanderIOSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeanderIOSApp.swift; sourceTree = "<group>"; };
+		A00200010000000000000002 /* BoardListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardListView.swift; sourceTree = "<group>"; };
+		A00200010000000000000003 /* BoardListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardListViewModel.swift; sourceTree = "<group>"; };
+		A00200010000000000000004 /* BoardDraft.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BoardDraft.swift; sourceTree = "<group>"; };
+		A00200010000000000000005 /* Remote.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Remote.swift; sourceTree = "<group>"; };
+		A00200010000000000000006 /* MeanderAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeanderAPIClient.swift; sourceTree = "<group>"; };
+		A00200010000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A00200010000000000000008 /* MeanderIOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MeanderIOS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00200010000000000000009 /* WebApp */ = {isa = PBXFileReference; lastKnownFileType = folder; path = WebApp; sourceTree = "<group>"; };
+		A0020001000000000000000A /* HKPRuntimeHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HKPRuntimeHost.h; sourceTree = "<group>"; };
+		A0020001000000000000000B /* HKPRuntimeHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = HKPRuntimeHost.mm; sourceTree = "<group>"; };
+		A0020001000000000000000C /* MeanderIOS-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "MeanderIOS-Bridging-Header.h"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00300010000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00400010000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A00400010000000000000002 /* MeanderIOS */,
+				A00400010000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00400010000000000000002 /* MeanderIOS */ = {
+			isa = PBXGroup;
+			children = (
+				A00400010000000000000004 /* App */,
+				A00400010000000000000005 /* Features */,
+				A00400010000000000000006 /* Models */,
+				A00400010000000000000007 /* Networking */,
+				A0040001000000000000000A /* Runtime */,
+				A00400010000000000000008 /* Resources */,
+			);
+			path = MeanderIOS;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00200010000000000000008 /* MeanderIOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000004 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A0020001000000000000000C /* MeanderIOS-Bridging-Header.h */,
+				A00200010000000000000001 /* MeanderIOSApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000005 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A00400010000000000000009 /* Boards */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000006 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A00200010000000000000004 /* BoardDraft.swift */,
+				A00200010000000000000005 /* Remote.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000007 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				A00200010000000000000006 /* MeanderAPIClient.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000008 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A00200010000000000000007 /* Info.plist */,
+				A00200010000000000000009 /* WebApp */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		A00400010000000000000009 /* Boards */ = {
+			isa = PBXGroup;
+			children = (
+				A00200010000000000000002 /* BoardListView.swift */,
+				A00200010000000000000003 /* BoardListViewModel.swift */,
+			);
+			path = Boards;
+			sourceTree = "<group>";
+		};
+		A0040001000000000000000A /* Runtime */ = {
+			isa = PBXGroup;
+			children = (
+				A0020001000000000000000A /* HKPRuntimeHost.h */,
+				A0020001000000000000000B /* HKPRuntimeHost.mm */,
+			);
+			path = Runtime;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00500010000000000000001 /* MeanderIOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00700010000000000000001 /* Build configuration list for PBXNativeTarget "MeanderIOS" */;
+			buildPhases = (
+				A00300010000000000000002 /* Sources */,
+				A00300010000000000000001 /* Frameworks */,
+				A00300010000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MeanderIOS;
+			productName = MeanderIOS;
+			productReference = A00200010000000000000008 /* MeanderIOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00600010000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A00500010000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = A00700010000000000000002 /* Build configuration list for PBXProject "MeanderIOS" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A00400010000000000000001;
+			productRefGroup = A00400010000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00500010000000000000001 /* MeanderIOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00300010000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100010000000000000007 /* WebApp in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00300010000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00100010000000000000001 /* MeanderIOSApp.swift in Sources */,
+				A00100010000000000000002 /* BoardListView.swift in Sources */,
+				A00100010000000000000003 /* BoardListViewModel.swift in Sources */,
+				A00100010000000000000004 /* BoardDraft.swift in Sources */,
+				A00100010000000000000005 /* Remote.swift in Sources */,
+				A00100010000000000000006 /* MeanderAPIClient.swift in Sources */,
+				A00100010000000000000008 /* HKPRuntimeHost.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A00800010000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		A00800010000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		A00800010000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"HKP_EMBEDDED_RUNTIME=0",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "/Users/cbastuck/Development/claude/hkp/hkp-rt/lib/include/";
+				INFOPLIST_FILE = MeanderIOS/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hkp.meanderios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OBJC_BRIDGING_HEADER = "MeanderIOS/App/MeanderIOS-Bridging-Header.h";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A00800010000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"HKP_EMBEDDED_RUNTIME=0",
+				);
+				GENERATE_INFOPLIST_FILE = NO;
+				HEADER_SEARCH_PATHS = "/Users/cbastuck/Development/claude/hkp/hkp-rt/lib/include/";
+				INFOPLIST_FILE = MeanderIOS/Resources/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.hkp.meanderios;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_OBJC_BRIDGING_HEADER = "MeanderIOS/App/MeanderIOS-Bridging-Header.h";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00700010000000000000001 /* Build configuration list for PBXNativeTarget "MeanderIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00800010000000000000003 /* Debug */,
+				A00800010000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00700010000000000000002 /* Build configuration list for PBXProject "MeanderIOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00800010000000000000001 /* Debug */,
+				A00800010000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00600010000000000000001 /* Project object */;
+}
