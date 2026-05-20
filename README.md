@@ -1,61 +1,84 @@
-# To generate the Xcode project
+# meander-ios
 
-# Device build
+SwiftUI iOS app that embeds the Meander mobile playground in a `WKWebView` backed by an in-process `hkp-rt` runtime.
 
-cmake -G Xcode -S meander-ios -B build/meander-ios -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_TOOLCHAIN_FILE=$(pwd)/3rdparty/vcpkg/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=arm64-ios
+## Building
 
-open build/meander-ios/MeanderIOS.xcodeproj
+Use `build-ios.sh` from the **repo root**. It builds the mobile web app first, then configures and compiles the native target.
 
-For Simulator (Apple Silicon Mac): swap iphoneos → iphonesimulator and arm64-ios → arm64-ios-simulator.
+```bash
+# Physical device (arm64)
+./build-ios.sh device Release
 
-One remaining step
+# Simulator (Apple Silicon)
+./build-ios.sh simulator Debug
+```
 
-Set your Apple Developer Team ID in the generated project (or in the CMakeLists before generating):  
- XCODE_ATTRIBUTE_DEVELOPMENT_TEAM "ABCDE12345"  
- vcpkg must also have the arm64-ios packages installed — run vcpkg install with --triplet arm64-ios if Boost/OpenSSL haven't
-been built for iOS yet.
+The script:
+1. Runs `npm run build:ios` in `meander/frontend/` — outputs the mobile web app directly into `MeanderIOS/Resources/WebApp/`
+2. Runs `cmake --preset ios-device` (or `ios-simulator`) — generates `build/meander-ios-device/MeanderIOS.xcodeproj`
+3. Builds the native target via `cmake --build`
 
-# Simulator build
+To iterate on the native side without rebuilding the frontend, open the generated project directly:
 
-cmake --preset ios-simulator -S meander-ios  
-open build/meander-ios-simulator/MeanderIOS.xcodeproj
+```bash
+open build/meander-ios-device/MeanderIOS.xcodeproj
+```
 
-vcpkg will build the arm64-ios-simulator packages into a separate vcpkg_installed/arm64-ios-simulator/ tree — fully  
- isolated from the device build. The two presets map to separate build/meander-ios-device/ and build/meander-ios-simulator/
-directories, so you can have both Xcode projects open at once without conflicts.
+### Prerequisites
 
-## What this includes
+- vcpkg `arm64-ios` packages (Boost, OpenSSL) — built automatically on first run
+- A Developer Team ID for device builds — set `XCODE_ATTRIBUTE_DEVELOPMENT_TEAM` in `CMakeLists.txt` or override in Xcode
 
-- SwiftUI host shell with `WKWebView`
-- Bundled Meander frontend loaded from app resources
-- Custom `hkp://` scheme handler for:
-  - `hkp://app/...` bundled frontend assets
-  - `hkp://boards` local board list/load/save/delete
-  - `hkp://remotes/` built-in remote runtime
-  - `hkp://remotes/meander-ios/*` passthrough to the real `hkp-rt` HTTP server
+## Architecture
 
-## Runtime Bridge Configuration
+### SwiftUI shell
 
-Set these keys in `MeanderIOS/Resources/Info.plist`:
+`BoardListView` hosts a `WKWebView` that loads `hkp://app/index.html` from bundled resources. A `WKURLSchemeHandler` intercepts all `hkp://` traffic and routes it natively.
 
-- `HKPRuntimeBaseURL` (default `http://127.0.0.1:5556`)
-- `HKPRuntimeRemoteName` (default `meander-ios`)
-- `HKPRuntimeAutoStart` (default `false`)
-- `HKPRuntimePort` (default `5556`)
-- `HKPRuntimeAllowedOrigins` (default `*`)
+### Platform marker
 
-The web app always sees a remote URL under the custom scheme (`hkp://remotes/<name>`), and the iOS host translates that into HTTP calls to the configured runtime server.
+Before any page JS runs, a `WKUserScript` injects:
 
-## Embedded Runtime Mode
+```js
+window.__MEANDER_IOS__ = true;
+```
 
-The iOS host now includes an Objective-C++ runtime host wrapper (`HKPRuntimeHost`) and app lifecycle hooks to start/stop an embedded `hkp-rt` server.
+The web app reads this in `main.tsx` to select the mobile playground (`MobileApp`) instead of the desktop one — no user-agent sniffing.
 
-- Runtime autostart is controlled by `HKPRuntimeAutoStart`.
-- When embedded runtime starts successfully, its URL is preferred over `HKPRuntimeBaseURL`.
-- The Xcode target defaults to `HKP_EMBEDDED_RUNTIME=0`, so builds remain safe without native `hkp-rt` iOS libs.
+### `hkp://` scheme routes
 
-To enable true in-process runtime:
+| Host | Purpose |
+|------|---------|
+| `hkp://app/…` | Bundled frontend assets (`WebApp/`) |
+| `hkp://boards/…` | Local board list / load / save / delete (stored in `Documents/Boards/`) |
+| `hkp://remotes/` | Lists the built-in embedded runtime as a remote |
+| `hkp://remotes/meander-ios/…` | Proxies REST calls to the `hkp-rt` HTTP server |
 
-1. Build/link iOS-compatible `hkp-rt` + dependencies (not macOS archives).
-2. Set `HKP_EMBEDDED_RUNTIME=1` in target preprocessor definitions.
-3. Ensure header/library search paths include `hkp-rt/lib/include` and the iOS-built runtime archive/deps.
+### Mobile web app
+
+Built from `meander/frontend/` via `vite.config.ios.ts`. Renders `MobilePlaygroundWithRouter` with:
+
+- `"mobile"` theme
+- Safe-area insets on the top bar and bottom tab bar (`env(safe-area-inset-*)`) for Dynamic Island / notch / home indicator
+- `availableRuntimeEngines` populated from `hkp://remotes/` (the embedded runtime appears automatically)
+
+## Configuration (`MeanderIOS/Resources/Info.plist`)
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `HKPRuntimeAutoStart` | `true` | Start `hkp-rt` on launch |
+| `HKPRuntimePort` | `5556` | Port the embedded runtime listens on |
+| `HKPRuntimeBaseURL` | `http://127.0.0.1:5556` | Fallback URL if embedded runtime doesn't start |
+| `HKPRuntimeRemoteName` | `meander-ios` | Name shown for the built-in remote |
+| `HKPRuntimeAllowedOrigins` | `*` | CORS origins allowed by the runtime |
+| `DEV_WEBAPP_URL` | *(remove for production)* | Load web app from a dev server instead of the bundle |
+
+## App identity
+
+| Field | Value |
+|-------|-------|
+| Bundle ID | `com.hookitapp.meander-ios` |
+| Display name | `Meander` |
+| Deployment target | iOS 16.0 |
+| Architecture | arm64 |

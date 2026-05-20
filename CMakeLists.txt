@@ -70,6 +70,8 @@ set(SWIFT_SOURCES
 set(OBJCXX_SOURCES
     MeanderIOS/Runtime/HKPRuntimeHost.h
     MeanderIOS/Runtime/HKPRuntimeHost.mm
+    MeanderIOS/Runtime/Services/DeviceMotionService.h
+    MeanderIOS/Runtime/Services/DeviceMotionService.mm
 )
 
 # ── Bundle resources ──────────────────────────────────────────────────────────
@@ -84,9 +86,17 @@ add_executable(MeanderIOS MACOSX_BUNDLE
     ${SWIFT_SOURCES}
     ${OBJCXX_SOURCES}
     ${WEBAPP_RESOURCES}
+    MeanderIOS/Assets.xcassets
 )
 
 # ── Resource placement inside the bundle ─────────────────────────────────────
+# Asset catalog: MACOSX_PACKAGE_LOCATION forces CMake to emit a PBXBuildFile
+# entry so Xcode places it in the Copy Bundle Resources phase and runs actool.
+set_source_files_properties(
+    MeanderIOS/Assets.xcassets
+    PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+)
+
 # Each WebApp file is placed under Resources/WebApp/<subpath> in the bundle,
 # preserving the directory structure from MeanderIOS/Resources/.
 foreach(RESOURCE_FILE ${WEBAPP_RESOURCES})
@@ -103,7 +113,7 @@ endforeach()
 # ── Xcode / bundle properties ─────────────────────────────────────────────────
 set_target_properties(MeanderIOS PROPERTIES
     # ── Bundle identity ───────────────────────────────────────────────────────
-    MACOSX_BUNDLE_GUI_IDENTIFIER        "to.hookup.meander-ios"
+    MACOSX_BUNDLE_GUI_IDENTIFIER        "com.hookitapp.meander-ios"
     MACOSX_BUNDLE_BUNDLE_VERSION        "1"
     MACOSX_BUNDLE_SHORT_VERSION_STRING  "1.0"
 
@@ -113,6 +123,15 @@ set_target_properties(MeanderIOS PROPERTIES
 
     # ── Swift ─────────────────────────────────────────────────────────────────
     XCODE_ATTRIBUTE_SWIFT_VERSION "5.9"
+
+    # CMake-generated projects don't set these automatically; without them
+    # #if DEBUG is never true in debug builds, and assert() is never stripped
+    # in release builds (ObjC++/C++ side via GCC_PREPROCESSOR_DEFINITIONS).
+    "XCODE_ATTRIBUTE_SWIFT_ACTIVE_COMPILATION_CONDITIONS[variant=Debug]"   "DEBUG"
+    "XCODE_ATTRIBUTE_SWIFT_ACTIVE_COMPILATION_CONDITIONS[variant=Release]" "NDEBUG"
+
+    "XCODE_ATTRIBUTE_GCC_PREPROCESSOR_DEFINITIONS[variant=Debug]"   "DEBUG=1 $(inherited)"
+    "XCODE_ATTRIBUTE_GCC_PREPROCESSOR_DEFINITIONS[variant=Release]" "NDEBUG=1 $(inherited)"
 
     # Bridging header: path relative to $(SRCROOT) as Xcode expects.
     XCODE_ATTRIBUTE_SWIFT_OBJC_BRIDGING_HEADER
@@ -136,7 +155,10 @@ set_target_properties(MeanderIOS PROPERTIES
     XCODE_ATTRIBUTE_CODE_SIGN_STYLE         "Automatic"
     XCODE_ATTRIBUTE_DEVELOPMENT_TEAM        ""   # e.g. "ABCDE12345"
     XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY      "iPhone Developer"
-    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "to.hookup.meander-ios"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.hookitapp.meander-ios"
+
+    # ── App icon ──────────────────────────────────────────────────────────────
+    XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
 
     # ── Miscellaneous ─────────────────────────────────────────────────────────
     # Bitcode was deprecated in Xcode 14 and removed in Xcode 15.
@@ -156,6 +178,7 @@ target_link_libraries(MeanderIOS PRIVATE
     "-framework WebKit"
     "-framework AudioToolbox"
     "-framework CoreFoundation"
+    "-framework CoreMotion"
 )
 
 # ── Header search paths ───────────────────────────────────────────────────────
@@ -163,4 +186,5 @@ target_link_libraries(MeanderIOS PRIVATE
 target_include_directories(MeanderIOS PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/MeanderIOS
     ${CMAKE_CURRENT_SOURCE_DIR}/MeanderIOS/Runtime
+    ${CMAKE_CURRENT_SOURCE_DIR}/MeanderIOS/Runtime/Services
 )

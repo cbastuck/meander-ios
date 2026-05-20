@@ -5,6 +5,8 @@
 #include <app.h>
 #include <server.h>
 
+#include "Services/DeviceMotionService.h"
+
 #include <chrono>
 #include <future>
 #include <memory>
@@ -47,6 +49,8 @@
       unsigned int usePort = (unsigned int)port;
 
       _app    = std::make_shared<hkp::App>();
+      _app->registerService<hkp::DeviceMotionService>();
+
       _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins);
 
       // A healthy server's start() blocks for the server's lifetime, so we

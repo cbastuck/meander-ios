@@ -16,6 +16,15 @@ private struct MeanderWebView: UIViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.setURLSchemeHandler(context.coordinator.schemeHandler, forURLScheme: "hkp")
 
+        // Inject an unambiguous platform marker before any page JS runs.
+        // The web app reads window.__MEANDER_IOS__ instead of sniffing the UA.
+        let platformScript = WKUserScript(
+            source: "window.__MEANDER_IOS__ = true;",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        configuration.userContentController.addUserScript(platformScript)
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
@@ -25,13 +34,17 @@ private struct MeanderWebView: UIViewRepresentable {
             webView.isInspectable = true
         }
 
-        // Check for DEV_WEBAPP_URL in Info.plist (or use a hardcoded fallback for dev)
+        #if DEBUG
+        // In debug builds only, DEV_WEBAPP_URL in Info.plist redirects to a local dev server.
         let devURL = Bundle.main.object(forInfoDictionaryKey: "DEV_WEBAPP_URL") as? String
         if let devURL = devURL, let url = URL(string: devURL) {
             webView.load(URLRequest(url: url))
         } else {
             webView.load(URLRequest(url: URL(string: "hkp://app/index.html")!))
         }
+        #else
+        webView.load(URLRequest(url: URL(string: "hkp://app/index.html")!))
+        #endif
         return webView
     }
 
