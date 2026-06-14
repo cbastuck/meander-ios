@@ -47,6 +47,6 @@
 	<key>HKPRuntimeAllowedOrigins</key>
 	<string>*</string>
 	<key>DEV_WEBAPP_URL</key>
-	<string>http://192.168.178.22:5555</string>
+	<string>http://127.0.0.1:5555</string>
 </dict>
 </plist>

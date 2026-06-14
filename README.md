@@ -72,7 +72,7 @@ Built from `meander/frontend/` via `vite.config.ios.ts`. Renders `MobilePlaygrou
 | `HKPRuntimeBaseURL` | `http://127.0.0.1:5556` | Fallback URL if embedded runtime doesn't start |
 | `HKPRuntimeRemoteName` | `meander-ios` | Name shown for the built-in remote |
 | `HKPRuntimeAllowedOrigins` | `*` | CORS origins allowed by the runtime |
-| `DEV_WEBAPP_URL` | *(remove for production)* | Load web app from a dev server instead of the bundle |
+| `DEV_WEBAPP_URL` | `http://127.0.0.1:5555` *(remove for production)* | Load web app from a dev server instead of the bundle. Use `http://127.0.0.1:5555` in the **Simulator** (it reaches the host Mac's vite server and is a secure context, so the cloud view's Auth0/PKCE login works). A LAN IP like `http://192.168.x.x:5555` works for a physical device but is **not** a secure context — `crypto.subtle` is unavailable there, so cloud login breaks, and hkp-frontend's `AuthProvider` strips the `Auth0Provider` on `http://192.168.*`. For device cloud-login testing, serve over HTTPS (tunnel or mkcert) instead. |
 
 ## App identity
 
