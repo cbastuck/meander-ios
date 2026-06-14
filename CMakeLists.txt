@@ -87,6 +87,7 @@ add_executable(MeanderIOS MACOSX_BUNDLE
     ${OBJCXX_SOURCES}
     ${WEBAPP_RESOURCES}
     MeanderIOS/Assets.xcassets
+    MeanderIOS/Resources/PrivacyInfo.xcprivacy
 )
 
 # ── Resource placement inside the bundle ─────────────────────────────────────
@@ -94,6 +95,13 @@ add_executable(MeanderIOS MACOSX_BUNDLE
 # entry so Xcode places it in the Copy Bundle Resources phase and runs actool.
 set_source_files_properties(
     MeanderIOS/Assets.xcassets
+    PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
+)
+
+# Privacy manifest: Apple requires PrivacyInfo.xcprivacy in the bundle for
+# App Store submission. Placed in Copy Bundle Resources like the asset catalog.
+set_source_files_properties(
+    MeanderIOS/Resources/PrivacyInfo.xcprivacy
     PROPERTIES MACOSX_PACKAGE_LOCATION "Resources"
 )
 
@@ -116,6 +124,14 @@ set_target_properties(MeanderIOS PROPERTIES
     MACOSX_BUNDLE_GUI_IDENTIFIER        "com.hookitapp.meander-ios"
     MACOSX_BUNDLE_BUNDLE_VERSION        "1"
     MACOSX_BUNDLE_SHORT_VERSION_STRING  "1.0"
+
+    # Info.plist references $(MARKETING_VERSION) / $(CURRENT_PROJECT_VERSION);
+    # CMake-generated projects don't define these, so without them the bundle
+    # ships with empty CFBundleShortVersionString/CFBundleVersion (App Store
+    # Connect rejects that). MARKETING_VERSION = user-facing (e.g. "1.0"),
+    # CURRENT_PROJECT_VERSION = build number, must increase per upload.
+    XCODE_ATTRIBUTE_MARKETING_VERSION       "1.0"
+    XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION "1"
 
     # Use the hand-authored Info.plist; CMake will expand $(VAR) references.
     MACOSX_BUNDLE_INFO_PLIST
@@ -159,6 +175,15 @@ set_target_properties(MeanderIOS PROPERTIES
 
     # ── App icon ──────────────────────────────────────────────────────────────
     XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"
+
+    # ── Dev web app redirect ──────────────────────────────────────────────────
+    # Info.plist's DEV_WEBAPP_URL = $(DEV_WEBAPP_URL). Defined only for the
+    # simulator SDK, so device / App Store builds expand it to empty (the app
+    # then loads the bundled WebApp). The dev server at 127.0.0.1:5555 is only
+    # reachable from the Simulator anyway. Keep this in sync with the dev
+    # server port in meander/frontend's vite config.
+    XCODE_ATTRIBUTE_DEV_WEBAPP_URL ""
+    "XCODE_ATTRIBUTE_DEV_WEBAPP_URL[sdk=iphonesimulator*]" "http://127.0.0.1:5555"
 
     # ── Miscellaneous ─────────────────────────────────────────────────────────
     # Bitcode was deprecated in Xcode 14 and removed in Xcode 15.

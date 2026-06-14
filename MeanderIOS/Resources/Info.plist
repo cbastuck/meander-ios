@@ -18,6 +18,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIApplicationSceneManifest</key>
@@ -47,6 +49,6 @@
 	<key>HKPRuntimeAllowedOrigins</key>
 	<string>*</string>
 	<key>DEV_WEBAPP_URL</key>
-	<string>http://127.0.0.1:5555</string>
+	<string>$(DEV_WEBAPP_URL)</string>
 </dict>
 </plist>
