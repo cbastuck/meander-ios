@@ -62,6 +62,7 @@ set(SWIFT_SOURCES
     MeanderIOS/App/MeanderIOSApp.swift
     MeanderIOS/Features/Boards/BoardListView.swift
     MeanderIOS/Features/Boards/BoardListViewModel.swift
+    MeanderIOS/Features/Boards/JSConsoleBridge.swift
     MeanderIOS/Models/BoardDraft.swift
     MeanderIOS/Models/Remote.swift
     MeanderIOS/Networking/MeanderAPIClient.swift

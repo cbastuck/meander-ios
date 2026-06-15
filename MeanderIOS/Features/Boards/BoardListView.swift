@@ -25,6 +25,10 @@ private struct MeanderWebView: UIViewRepresentable {
         )
         configuration.userContentController.addUserScript(platformScript)
 
+        // Forward JS console output and uncaught errors to the native (Xcode) console.
+        // Comment out this line to disable the bridge; see JSConsoleBridge.swift.
+        JSConsoleBridge.install(into: configuration)
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
@@ -57,6 +61,18 @@ private struct MeanderWebView: UIViewRepresentable {
 
 private final class Coordinator: NSObject, WKNavigationDelegate {
     let schemeHandler = MeanderSchemeHandler()
+
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+        NSLog("Meander iOS nav start: %@", webView.url?.absoluteString ?? "?")
+    }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
+        NSLog("Meander iOS nav commit: %@", webView.url?.absoluteString ?? "?")
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        NSLog("Meander iOS nav finish: %@", webView.url?.absoluteString ?? "?")
+    }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
         NSLog("Meander iOS navigation failed: %@", error.localizedDescription)
