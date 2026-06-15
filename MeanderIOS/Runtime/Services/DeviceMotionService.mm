@@ -23,7 +23,7 @@ DeviceMotionService::DeviceMotionService(const std::string& instanceId)
   : Service(instanceId, serviceId())
   , m_impl(std::make_unique<Impl>())
 {
-  m_bypass = true;
+  m_bypass = true; // Off until the board un-bypasses; a freshly added service stays inactive.
 }
 
 DeviceMotionService::~DeviceMotionService() = default;
@@ -43,8 +43,9 @@ json DeviceMotionService::getState() const
 {
   json state;
   state["interval"] = m_interval;
+  // Read-only device status (not configurable). Whether the sensor is running
+  // is expressed by `bypass`: active == !bypass.
   state["available"] = (bool)m_impl->motionManager.isDeviceMotionAvailable;
-  state["active"]    = (bool)m_impl->motionManager.isDeviceMotionActive;
   return mergeBypassState(state);
 }
 
@@ -87,20 +88,20 @@ bool DeviceMotionService::onBypassChanged(bool bypass)
   if (bypass)
   {
     stop();
+    return true;
   }
-  else
+  // Un-bypass requested: only activate if the sensor is actually available.
+  // If it cannot start, stay bypassed so `bypass` honestly reflects reality.
+  if (!m_impl->motionManager.isDeviceMotionAvailable)
   {
-    start();
+    return true;
   }
-  return bypass;
+  start();
+  return false;
 }
 
 void DeviceMotionService::start()
 {
-  if (!m_impl->motionManager.isDeviceMotionAvailable)
-  {
-    return;
-  }
   m_impl->motionManager.deviceMotionUpdateInterval = m_interval;
   [m_impl->motionManager startDeviceMotionUpdates];
 }

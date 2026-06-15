@@ -72,6 +72,8 @@ set(OBJCXX_SOURCES
     MeanderIOS/Runtime/HKPRuntimeHost.mm
     MeanderIOS/Runtime/Services/DeviceMotionService.h
     MeanderIOS/Runtime/Services/DeviceMotionService.mm
+    MeanderIOS/Runtime/Services/LocationService.h
+    MeanderIOS/Runtime/Services/LocationService.mm
 )
 
 # ── Bundle resources ──────────────────────────────────────────────────────────
@@ -204,6 +206,7 @@ target_link_libraries(MeanderIOS PRIVATE
     "-framework AudioToolbox"
     "-framework CoreFoundation"
     "-framework CoreMotion"
+    "-framework CoreLocation"
 )
 
 # ── Header search paths ───────────────────────────────────────────────────────

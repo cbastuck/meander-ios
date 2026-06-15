@@ -6,6 +6,7 @@
 #include <server.h>
 
 #include "Services/DeviceMotionService.h"
+#include "Services/LocationService.h"
 
 #include <chrono>
 #include <future>
@@ -50,6 +51,7 @@
 
       _app    = std::make_shared<hkp::App>();
       _app->registerService<hkp::DeviceMotionService>();
+      _app->registerService<hkp::LocationService>();
 
       _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins);
 
