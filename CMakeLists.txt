@@ -75,6 +75,10 @@ set(OBJCXX_SOURCES
     MeanderIOS/Runtime/Services/DeviceMotionService.mm
     MeanderIOS/Runtime/Services/LocationService.h
     MeanderIOS/Runtime/Services/LocationService.mm
+    MeanderIOS/Runtime/Services/MicrophoneService.h
+    MeanderIOS/Runtime/Services/MicrophoneService.mm
+    MeanderIOS/Runtime/Services/SpeakerService.h
+    MeanderIOS/Runtime/Services/SpeakerService.mm
 )
 
 # ── Bundle resources ──────────────────────────────────────────────────────────
@@ -205,6 +209,7 @@ target_link_libraries(MeanderIOS PRIVATE
     "-framework UIKit"
     "-framework WebKit"
     "-framework AudioToolbox"
+    "-framework AVFoundation"
     "-framework CoreFoundation"
     "-framework CoreMotion"
     "-framework CoreLocation"

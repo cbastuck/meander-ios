@@ -7,6 +7,8 @@
 
 #include "Services/DeviceMotionService.h"
 #include "Services/LocationService.h"
+#include "Services/MicrophoneService.h"
+#include "Services/SpeakerService.h"
 
 #include <chrono>
 #include <future>
@@ -52,6 +54,8 @@
       _app    = std::make_shared<hkp::App>();
       _app->registerService<hkp::DeviceMotionService>();
       _app->registerService<hkp::LocationService>();
+      _app->registerService<hkp::MicrophoneService>();
+      _app->registerService<hkp::SpeakerService>();
 
       _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins);
 
