@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Meander</string>
+	<string>Readymade</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
-	<string>Meander</string>
+	<string>Readymade</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -42,6 +42,12 @@
 	<string>Meander uses your location only while a board you run asks for it — for example to share your live position over a link. Location is sent only to the destinations your board defines, and only while the board is running.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Meander uses the microphone only while a board you run asks for it — for example to capture, analyse, or stream audio. Audio is sent only to the destinations your board defines, and only while the board is running.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Meander uses the local network only while you actively look for other Meander instances on the same network, so you can connect them without typing IP addresses.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_readymade._tcp</string>
+	</array>
 	<key>HKPRuntimeBaseURL</key>
 	<string>http://127.0.0.1:5556</string>
 	<key>HKPRuntimeRemoteName</key>

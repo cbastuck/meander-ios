@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)startWithPort:(NSUInteger)port
        allowedOrigins:(NSString *)allowedOrigins
+           deviceName:(nullable NSString *)deviceName
                 error:(NSError * _Nullable * _Nullable)error;
 
 - (void)stop;

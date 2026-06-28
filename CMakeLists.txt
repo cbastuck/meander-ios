@@ -128,7 +128,7 @@ endforeach()
 # ── Xcode / bundle properties ─────────────────────────────────────────────────
 set_target_properties(MeanderIOS PROPERTIES
     # ── Bundle identity ───────────────────────────────────────────────────────
-    MACOSX_BUNDLE_GUI_IDENTIFIER        "com.hookitapp.meander-ios"
+    MACOSX_BUNDLE_GUI_IDENTIFIER        "com.readymadeit.app-ios"
     MACOSX_BUNDLE_BUNDLE_VERSION        "1"
     MACOSX_BUNDLE_SHORT_VERSION_STRING  "1.0"
 
@@ -178,7 +178,11 @@ set_target_properties(MeanderIOS PROPERTIES
     XCODE_ATTRIBUTE_CODE_SIGN_STYLE         "Automatic"
     XCODE_ATTRIBUTE_DEVELOPMENT_TEAM        ""   # e.g. "ABCDE12345"
     XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY      "iPhone Developer"
-    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.hookitapp.meander-ios"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.readymadeit.app-ios"
+
+    # ── Entitlements (LAN discovery needs the multicast entitlement) ──────────
+    XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/MeanderIOS/Resources/MeanderIOS.entitlements"
 
     # ── App icon ──────────────────────────────────────────────────────────────
     XCODE_ATTRIBUTE_ASSETCATALOG_COMPILER_APPICON_NAME "AppIcon"

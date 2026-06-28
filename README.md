@@ -78,7 +78,7 @@ Built from `meander/frontend/` via `vite.config.ios.ts`. Renders `MobilePlaygrou
 
 | Field | Value |
 |-------|-------|
-| Bundle ID | `com.hookitapp.meander-ios` |
+| Bundle ID | `com.readymadeit.app-ios` |
 | Display name | `Meander` |
 | Deployment target | iOS 16.0 |
 | Architecture | arm64 |

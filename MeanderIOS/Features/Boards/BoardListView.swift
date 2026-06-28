@@ -25,6 +25,21 @@ private struct MeanderWebView: UIViewRepresentable {
         )
         configuration.userContentController.addUserScript(platformScript)
 
+        // Expose the local runtime to the web app's DiscoveryApi. It is reached
+        // through the existing hkp://remotes/<name> proxy (no cross-origin http
+        // fetch), so `${runtimeBaseURL}/discover` resolves to the embedded
+        // runtime's /discover endpoint.
+        let runtimeRemoteName = AppBridgeConfig.runtimeRemoteName
+        let runtimeConfigScript = WKUserScript(
+            source: """
+            window.__MEANDER_CONFIG__ = Object.assign(window.__MEANDER_CONFIG__ || {}, \
+            { runtimeBaseURL: "hkp://remotes/\(runtimeRemoteName)" });
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        configuration.userContentController.addUserScript(runtimeConfigScript)
+
         // Forward JS console output and uncaught errors to the native (Xcode) console.
         // Comment out this line to disable the bridge; see JSConsoleBridge.swift.
         JSConsoleBridge.install(into: configuration)

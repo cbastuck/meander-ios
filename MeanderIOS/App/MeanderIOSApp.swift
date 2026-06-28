@@ -15,7 +15,11 @@ private final class MeanderIOSAppDelegate: NSObject, UIApplicationDelegate {
         let allowedOrigins = (Bundle.main.object(forInfoDictionaryKey: "HKPRuntimeAllowedOrigins") as? String) ?? "*"
 
         do {
-            try HKPRuntimeHost.shared().start(withPort: UInt(port), allowedOrigins: allowedOrigins)
+            try HKPRuntimeHost.shared().start(
+                withPort: UInt(port),
+                allowedOrigins: allowedOrigins,
+                deviceName: UIDevice.current.name
+            )
             if let runtimeURL = HKPRuntimeHost.shared().runtimeBaseURL {
                 NSLog("Embedded hkp-rt started at %@", runtimeURL)
             }

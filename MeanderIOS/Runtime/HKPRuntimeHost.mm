@@ -37,6 +37,7 @@
 
 - (BOOL)startWithPort:(NSUInteger)port
        allowedOrigins:(NSString *)allowedOrigins
+           deviceName:(NSString *)deviceName
                 error:(NSError * _Nullable * _Nullable)error {
   @synchronized(self) {
     if (self.isRunning) {
@@ -45,6 +46,7 @@
 
     try {
       std::string origins([allowedOrigins UTF8String]);
+      std::string displayName = deviceName ? std::string([deviceName UTF8String]) : std::string();
 
       // Port 0 lets the OS pick a free port, avoiding "address already in use"
       // on repeated simulator launches.  _server->port() reports the actual port
@@ -57,7 +59,7 @@
       _app->registerService<hkp::MicrophoneService>();
       _app->registerService<hkp::SpeakerService>();
 
-      _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins);
+      _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins, displayName);
 
       // A healthy server's start() blocks for the server's lifetime, so we
       // cannot wait for it to return.  Instead we use a promise to detect an

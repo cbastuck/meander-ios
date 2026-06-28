@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Required for the raw multicast sockets used by LAN discovery (mDNS on
+	     224.0.0.251:5353). Apple gates this behind a request form:
+	     https://developer.apple.com/contact/request/networking-multicast -->
+	<key>com.apple.developer.networking.multicast</key>
+	<true/>
+</dict>
+</plist>
