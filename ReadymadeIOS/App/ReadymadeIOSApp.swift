@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-private final class MeanderIOSAppDelegate: NSObject, UIApplicationDelegate {
+private final class ReadymadeIOSAppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
@@ -36,8 +36,8 @@ private final class MeanderIOSAppDelegate: NSObject, UIApplicationDelegate {
 }
 
 @main
-struct MeanderIOSApp: App {
-    @UIApplicationDelegateAdaptor(MeanderIOSAppDelegate.self) private var appDelegate
+struct ReadymadeIOSApp: App {
+    @UIApplicationDelegateAdaptor(ReadymadeIOSAppDelegate.self) private var appDelegate
 
     var body: some Scene {
         WindowGroup {

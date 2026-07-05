@@ -44,6 +44,16 @@ private struct MeanderWebView: UIViewRepresentable {
         // Comment out this line to disable the bridge; see JSConsoleBridge.swift.
         JSConsoleBridge.install(into: configuration)
 
+        // Bridge for the web app to push the signed-in user's email to the
+        // embedded runtime's auth allow-list (RuntimeUserSync → setRuntimeAllowedUser).
+        configuration.userContentController.add(
+            context.coordinator, name: "hkpRuntimeAuth")
+
+        // Native Auth0 login (ASWebAuthenticationSession + PKCE); the web app
+        // awaits the reply of hkpAuth.postMessage({domain, clientId, scheme}).
+        configuration.userContentController.addScriptMessageHandler(
+            context.coordinator.authBridge, contentWorld: .page, name: "hkpAuth")
+
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
@@ -74,8 +84,25 @@ private struct MeanderWebView: UIViewRepresentable {
     }
 }
 
-private final class Coordinator: NSObject, WKNavigationDelegate {
+private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     let schemeHandler = MeanderSchemeHandler()
+    let authBridge = AuthSessionBridge()
+
+    // Receives { email } from the web app and updates the embedded runtime's
+    // allow-list so the owner's other devices may drive it (empty = re-locked).
+    func userContentController(
+        _ userContentController: WKUserContentController,
+        didReceive message: WKScriptMessage
+    ) {
+        guard message.name == "hkpRuntimeAuth" else { return }
+        var emails: [String] = []
+        if let body = message.body as? [String: Any],
+           let email = body["email"] as? String,
+           !email.isEmpty {
+            emails = [email]
+        }
+        HKPRuntimeHost.shared().setLoginUsers(emails)
+    }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
         NSLog("Meander iOS nav start: %@", webView.url?.absoluteString ?? "?")
@@ -146,11 +173,60 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             try serveBoards(for: task, url: url, method: method)
         case "remotes":
             try serveRemotes(for: task, url: url, method: method)
+        case "settings":
+            serveSettings(for: task, method: method)
         default:
             respond(
                 to: task,
                 statusCode: 404,
                 data: jsonData(["error": "Unknown route: \(url.absoluteString)"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+    }
+
+    private func serveSettings(for task: WKURLSchemeTask, method: String) {
+        let host = HKPRuntimeHost.shared()
+
+        func current() -> [String: Any] {
+            return [
+                "allowExternalRuntimeAccess": host.externalAccessEnabled,
+                "allowedUsers": host.manualAllowedUsers,
+            ]
+        }
+
+        switch method {
+        case "GET":
+            respond(
+                to: task,
+                statusCode: 200,
+                data: jsonData(current()),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        case "POST":
+            if let body = requestBody(from: task.request),
+               let payload = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any] {
+                if let expose = payload["allowExternalRuntimeAccess"] as? Bool {
+                    host.externalAccessEnabled = expose
+                }
+                if let users = payload["allowedUsers"] as? [String] {
+                    host.manualAllowedUsers = users
+                }
+            }
+            respond(
+                to: task,
+                statusCode: 200,
+                data: jsonData(current()),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        default:
+            respond(
+                to: task,
+                statusCode: 405,
+                data: jsonData(["error": "Unsupported settings request"]),
                 mimeType: "application/json",
                 headers: apiHeaders
             )

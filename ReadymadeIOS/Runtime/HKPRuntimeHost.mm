@@ -20,10 +20,19 @@
 @property (nonatomic, copy, readwrite, nullable) NSString *runtimeBaseURL;
 @end
 
+static NSString * const kExternalAccessKey = @"hkpAllowExternalRuntimeAccess";
+static NSString * const kManualAllowedUsersKey = @"hkpManualAllowedUsers";
+
 @implementation HKPRuntimeHost {
   std::shared_ptr<hkp::App> _app;
   std::shared_ptr<hkp::Server> _server;
   std::shared_ptr<std::thread> _serverThread;
+  // The effective allow-list is the union of the manually-configured users
+  // (persisted in prefs, edited via the Settings UI) and the signed-in user
+  // (pushed by the web app on login). Tracked separately so each can change
+  // independently.
+  NSArray<NSString *> *_manualAllowedUsers;
+  NSArray<NSString *> *_loginUsers;
 }
 
 + (instancetype)shared {
@@ -59,7 +68,23 @@
       _app->registerService<hkp::MicrophoneService>();
       _app->registerService<hkp::SpeakerService>();
 
-      _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins, displayName);
+      // When exposed (below), the runtime must authenticate inbound peers, so
+      // start in Jwt mode with the Auth0 issuer and an EMPTY allow-list —
+      // fail-closed, i.e. locked to every LAN peer — until users are admitted
+      // via setLoginUsers: (sign-in) / setManualAllowedUsers: (Settings). The
+      // local UI always works through the loopback bypass.
+      hkp::AuthConfig authConfig;
+      authConfig.mode = hkp::AuthMode::Jwt;
+      hkp::TrustedIssuer issuer;
+      issuer.iss = "https://hookitapp.eu.auth0.com/";
+      issuer.audiences = {"gpk8IFPKfaOTQUzpDRO7vBajOnB72rkM"};
+      authConfig.issuers.push_back(issuer);
+
+      _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins, displayName, authConfig);
+
+      // Bind 0.0.0.0 (LAN) or 127.0.0.1 (local-only) based on the user's
+      // preference. Chosen once, at start — toggling it needs an app restart.
+      std::string bindAddress = [self externalAccessEnabled] ? "0.0.0.0" : "127.0.0.1";
 
       // A healthy server's start() blocks for the server's lifetime, so we
       // cannot wait for it to return.  Instead we use a promise to detect an
@@ -70,9 +95,9 @@
 
       std::shared_ptr<hkp::Server> serverCopy = _server;
       _serverThread = std::make_shared<std::thread>(
-          [serverCopy, usePort, startPromise = std::move(startPromise)]() mutable {
+          [serverCopy, usePort, bindAddress, startPromise = std::move(startPromise)]() mutable {
             try {
-              serverCopy->start("127.0.0.1", usePort);
+              serverCopy->start("127.0.0.1", usePort, bindAddress);
               // start() returned — server shut down cleanly; nothing to signal.
             } catch (...) {
               // Propagate bind or other startup errors to the caller.
@@ -93,6 +118,13 @@
       unsigned int actualPort = _server->port();
       self.runtimeBaseURL = [NSString stringWithFormat:@"http://127.0.0.1:%u", actualPort];
       self.isRunning = YES;
+
+      // Seed the allow-list from the persisted manual users (login user arrives
+      // later, via setLoginUsers:).
+      _manualAllowedUsers = [self manualAllowedUsers];
+      _loginUsers = @[];
+      [self applyAllowedUsers];
+
       return YES;
 
     } catch (const std::exception& e) {
@@ -130,6 +162,65 @@
     _app.reset();
     self.runtimeBaseURL = nil;
     self.isRunning = NO;
+  }
+}
+
+// Applies union(manual users, login users) to the running server's allow-list.
+- (void)applyAllowedUsers {
+  if (!_server) {
+    return;
+  }
+  NSMutableSet<NSString *> *set = [NSMutableSet set];
+  for (NSString *email in _manualAllowedUsers) {
+    if (email.length > 0) {
+      [set addObject:email];
+    }
+  }
+  for (NSString *email in _loginUsers) {
+    if (email.length > 0) {
+      [set addObject:email];
+    }
+  }
+  std::vector<std::string> allowed;
+  for (NSString *email in set) {
+    allowed.push_back(std::string([email UTF8String]));
+  }
+  _server->setAllowedUsers(allowed);
+}
+
+- (void)setLoginUsers:(NSArray<NSString *> *)emails {
+  @synchronized(self) {
+    _loginUsers = emails ?: @[];
+    [self applyAllowedUsers];
+  }
+}
+
+- (BOOL)externalAccessEnabled {
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  // Default to exposed when unset, preserving prior behaviour (auth-gated).
+  if ([defaults objectForKey:kExternalAccessKey] == nil) {
+    return YES;
+  }
+  return [defaults boolForKey:kExternalAccessKey];
+}
+
+- (void)setExternalAccessEnabled:(BOOL)enabled {
+  // Takes effect on next start (the bind address is chosen once, at startup).
+  [[NSUserDefaults standardUserDefaults] setBool:enabled forKey:kExternalAccessKey];
+}
+
+- (NSArray<NSString *> *)manualAllowedUsers {
+  NSArray<NSString *> *stored =
+      [[NSUserDefaults standardUserDefaults] arrayForKey:kManualAllowedUsersKey];
+  return stored ?: @[];
+}
+
+- (void)setManualAllowedUsers:(NSArray<NSString *> *)emails {
+  @synchronized(self) {
+    NSArray<NSString *> *value = emails ?: @[];
+    [[NSUserDefaults standardUserDefaults] setObject:value forKey:kManualAllowedUsersKey];
+    _manualAllowedUsers = value;
+    [self applyAllowedUsers];
   }
 }
 
