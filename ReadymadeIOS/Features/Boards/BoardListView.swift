@@ -175,6 +175,8 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             try serveRemotes(for: task, url: url, method: method)
         case "settings":
             serveSettings(for: task, method: method)
+        case "mint-token":
+            serveMintToken(for: task, url: url, method: method)
         default:
             respond(
                 to: task,
@@ -231,6 +233,76 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
                 headers: apiHeaders
             )
         }
+    }
+
+    // Hierarchical mint-token namespace (hkp://mint-token/<action>). The action
+    // names the semantic capability; one is wired today. Add a case as more
+    // mint-token actions are introduced.
+    // NOTE: needs Xcode build verification (not compiled in this environment).
+    private func serveMintToken(for task: WKURLSchemeTask, url: URL, method: String) {
+        switch url.path {
+        case "/process-runtime":
+            serveMintProcessRuntimeToken(for: task, method: method)
+        default:
+            respond(
+                to: task,
+                statusCode: 404,
+                data: jsonData(["error": "Unknown mint-token action: \(url.absoluteString)"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+    }
+
+    // Mints a scoped capability token for the embedded runtime. Reachable only
+    // through the hkp:// scheme — i.e. from this app's own webview — so being
+    // able to call it is itself the authorization. The token authorizes POST
+    // /runtimes/<runtimeId> and nothing else; it is handed to an out-of-band
+    // device (a phone) via a QR code.
+    private func serveMintProcessRuntimeToken(for task: WKURLSchemeTask, method: String) {
+        guard method == "POST" else {
+            respond(
+                to: task,
+                statusCode: 405,
+                data: jsonData(["error": "Unsupported mint-token/process-runtime request"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+            return
+        }
+
+        guard let body = requestBody(from: task.request),
+              let payload = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
+              let runtimeId = payload["runtimeId"] as? String,
+              !runtimeId.isEmpty else {
+            respond(
+                to: task,
+                statusCode: 400,
+                data: jsonData(["error": "Missing runtimeId"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+            return
+        }
+
+        guard let token = HKPRuntimeHost.shared().mintProcessRuntimeGrant(forRuntime: runtimeId) else {
+            respond(
+                to: task,
+                statusCode: 404,
+                data: jsonData(["error": "Unknown runtime or unavailable"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+            return
+        }
+
+        respond(
+            to: task,
+            statusCode: 200,
+            data: jsonData(["token": token]),
+            mimeType: "application/json",
+            headers: apiHeaders
+        )
     }
 
     private func serveAppResource(for url: URL, task: WKURLSchemeTask) throws {

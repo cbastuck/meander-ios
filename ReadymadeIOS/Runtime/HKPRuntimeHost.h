@@ -20,6 +20,13 @@ NS_ASSUME_NONNULL_BEGIN
 // (union) with the manual allow-list to form the effective allow-list.
 - (void)setLoginUsers:(NSArray<NSString *> *)emails;
 
+// Mints a short-lived capability token scoped to POST /runtimes/<runtimeId> (the
+// process endpoint), for handing to an out-of-band device via a QR code. Called
+// in-process by the scheme handler (this app's own webview), so being able to
+// call it is itself the authorization. Returns nil if the runtime is unknown or
+// the server isn't running.
+- (nullable NSString *)mintProcessRuntimeGrantForRuntime:(NSString *)runtimeId;
+
 // Manual allow-list + LAN exposure, edited via the Settings UI and persisted in
 // user defaults. Allow-list changes apply live; exposure applies on next start.
 @property (nonatomic, assign) BOOL externalAccessEnabled;

@@ -195,6 +195,19 @@ static NSString * const kManualAllowedUsersKey = @"hkpManualAllowedUsers";
   }
 }
 
+- (nullable NSString *)mintProcessRuntimeGrantForRuntime:(NSString *)runtimeId {
+  @synchronized(self) {
+    if (!_server || runtimeId.length == 0) {
+      return nil;
+    }
+    std::string token = _server->mintProcessRuntimeGrant(std::string([runtimeId UTF8String]));
+    if (token.empty()) {
+      return nil;
+    }
+    return [NSString stringWithUTF8String:token.c_str()];
+  }
+}
+
 - (BOOL)externalAccessEnabled {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   // Default to exposed when unset, preserving prior behaviour (auth-gated).
