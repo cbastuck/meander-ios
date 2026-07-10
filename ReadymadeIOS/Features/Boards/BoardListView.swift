@@ -127,6 +127,7 @@ private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessage
 
 private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     private let boardStore = BoardStore()
+    private let remoteStore = RemoteStore()
     private let remoteRuntime = RemoteRuntimeBridge(
         remoteName: AppBridgeConfig.runtimeRemoteName,
         runtimeBaseURL: AppBridgeConfig.runtimeBaseURL
@@ -382,30 +383,104 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         }
     }
 
+    // The embedded runtime, always exposed as a remote reachable in-process
+    // through the hkp://remotes/<name> proxy. Not persisted — synthesized on
+    // every read so it can never be removed or drift from the live runtime.
+    private func embeddedRemote() -> [[String: Any]] {
+        let defaultPort: Int
+        if let configuredPort = remoteRuntime.runtimeBaseURL.port {
+            defaultPort = configuredPort
+        } else {
+            defaultPort = remoteRuntime.runtimeBaseURL.scheme?.lowercased() == "https" ? 443 : 80
+        }
+
+        return [[
+            "url": "hkp://remotes/\(remoteRuntime.remoteName)",
+            "port": defaultPort,
+            "name": remoteRuntime.remoteName,
+        ]]
+    }
+
     private func serveRemotes(for task: WKURLSchemeTask, url: URL, method: String) throws {
         let path = normalizedPath(url.path)
 
+        // The collection route (hkp://remotes/) is the remotes list itself:
+        // the always-present embedded runtime plus any user-added remotes
+        // (e.g. peers found through LAN discovery) persisted in RemoteStore.
         if path.isEmpty {
-            let defaultPort: Int
-            if let configuredPort = remoteRuntime.runtimeBaseURL.port {
-                defaultPort = configuredPort
-            } else {
-                defaultPort = remoteRuntime.runtimeBaseURL.scheme?.lowercased() == "https" ? 443 : 80
+            switch method {
+            case "GET":
+                respond(
+                    to: task,
+                    statusCode: 200,
+                    data: jsonData(embeddedRemote() + remoteStore.list()),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
+            case "POST":
+                guard let body = requestBody(from: task.request),
+                      let remote = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
+                      let name = (remote["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                      !name.isEmpty else {
+                    respond(
+                        to: task,
+                        statusCode: 400,
+                        data: jsonData(["error": "Invalid remote payload"]),
+                        mimeType: "application/json",
+                        headers: apiHeaders
+                    )
+                    return
+                }
+                // The embedded runtime is synthesized, not stored; refuse to
+                // shadow it so it can never be duplicated or overwritten.
+                guard name != remoteRuntime.remoteName else {
+                    respond(
+                        to: task,
+                        statusCode: 409,
+                        data: jsonData(["error": "Reserved remote name"]),
+                        mimeType: "application/json",
+                        headers: apiHeaders
+                    )
+                    return
+                }
+                try remoteStore.save(remote, named: name)
+                respond(
+                    to: task,
+                    statusCode: 200,
+                    data: jsonData(["saved": name]),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
+            case "DELETE":
+                guard let body = requestBody(from: task.request),
+                      let payload = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
+                      let name = payload["name"] as? String else {
+                    respond(
+                        to: task,
+                        statusCode: 400,
+                        data: jsonData(["error": "Missing remote name"]),
+                        mimeType: "application/json",
+                        headers: apiHeaders
+                    )
+                    return
+                }
+                try remoteStore.delete(named: name)
+                respond(
+                    to: task,
+                    statusCode: 200,
+                    data: jsonData(["deleted": name]),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
+            default:
+                respond(
+                    to: task,
+                    statusCode: 405,
+                    data: jsonData(["error": "Unsupported remotes request"]),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
             }
-
-            let remotes: [[String: Any]] = [[
-                "url": "hkp://remotes/\(remoteRuntime.remoteName)",
-                "port": defaultPort,
-                "name": remoteRuntime.remoteName,
-            ]]
-
-            respond(
-                to: task,
-                statusCode: 200,
-                data: jsonData(remotes),
-                mimeType: "application/json",
-                headers: apiHeaders
-            )
             return
         }
 
@@ -646,6 +721,50 @@ private final class BoardStore {
         }
 
         return trimmed
+    }
+}
+
+/// Persists user-added remotes (e.g. LAN-discovered peers) to a JSON file in
+/// Documents, so they survive relaunches. The embedded runtime is not stored
+/// here — it is synthesized on read by the scheme handler.
+private final class RemoteStore {
+    private let fileManager = FileManager.default
+
+    func list() -> [[String: Any]] {
+        guard let data = try? Data(contentsOf: remotesFileURL()),
+              let remotes = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else {
+            return []
+        }
+        return remotes
+    }
+
+    /// Upsert by name: a repeat add of the same remote replaces the prior entry
+    /// rather than duplicating it.
+    func save(_ remote: [String: Any], named name: String) throws {
+        var remotes = list().filter { ($0["name"] as? String) != name }
+        remotes.append(remote)
+        try write(remotes)
+    }
+
+    func delete(named name: String) throws {
+        let remotes = list().filter { ($0["name"] as? String) != name }
+        try write(remotes)
+    }
+
+    private func write(_ remotes: [[String: Any]]) throws {
+        try ensureRemotesDirectory()
+        let data = try JSONSerialization.data(withJSONObject: remotes, options: [])
+        try data.write(to: remotesFileURL(), options: .atomic)
+    }
+
+    private func remotesFileURL() -> URL {
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsURL.appendingPathComponent("remotes.json")
+    }
+
+    private func ensureRemotesDirectory() throws {
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        try fileManager.createDirectory(at: documentsURL, withIntermediateDirectories: true)
     }
 }
 
