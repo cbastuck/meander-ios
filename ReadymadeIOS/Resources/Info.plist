@@ -20,6 +20,19 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Custom scheme the Share Extension uses to hand a captured share off to
+	     this app: readymade://share?id=<inbox-item-id>. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.readymadeit.app-ios.share</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>readymade</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIApplicationSceneManifest</key>

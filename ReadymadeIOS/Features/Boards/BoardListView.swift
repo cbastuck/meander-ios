@@ -40,6 +40,26 @@ private struct MeanderWebView: UIViewRepresentable {
         )
         configuration.userContentController.addUserScript(runtimeConfigScript)
 
+        // Share bridge: defines the sink the native side calls when a share is
+        // delivered (see ShareRouter). Injected at document start so it exists
+        // before React mounts — envelopes that arrive early queue on
+        // window.__READYMADE_SHARES__ and the web app drains them on mount;
+        // later ones invoke window.__readymadeOnShare directly.
+        let shareBridgeScript = WKUserScript(
+            source: """
+            window.__READYMADE_SHARES__ = window.__READYMADE_SHARES__ || [];
+            window.__readymadeDeliverShare = function (env) {
+              try {
+                window.__READYMADE_SHARES__.push(env);
+                if (window.__readymadeOnShare) { window.__readymadeOnShare(env); }
+              } catch (e) {}
+            };
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        configuration.userContentController.addUserScript(shareBridgeScript)
+
         // Forward JS console output and uncaught errors to the native (Xcode) console.
         // Comment out this line to disable the bridge; see JSConsoleBridge.swift.
         JSConsoleBridge.install(into: configuration)
@@ -48,6 +68,11 @@ private struct MeanderWebView: UIViewRepresentable {
         // embedded runtime's auth allow-list (RuntimeUserSync → setRuntimeAllowedUser).
         configuration.userContentController.add(
             context.coordinator, name: "hkpRuntimeAuth")
+
+        // Bridge for the web app to mirror its board names into the App Group,
+        // so the share extension can offer a native board picker.
+        configuration.userContentController.add(
+            context.coordinator, name: "hkpShareBoards")
 
         // Native Auth0 login (ASWebAuthenticationSession + PKCE); the web app
         // awaits the reply of hkpAuth.postMessage({domain, clientId, scheme}).
@@ -58,6 +83,9 @@ private struct MeanderWebView: UIViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+
+        // Let the share router push captured shares into this page.
+        ShareRouter.shared.register(webView: webView)
 
         if #available(iOS 16.4, *) {
             webView.isInspectable = true
@@ -88,20 +116,33 @@ private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessage
     let schemeHandler = MeanderSchemeHandler()
     let authBridge = AuthSessionBridge()
 
-    // Receives { email } from the web app and updates the embedded runtime's
-    // allow-list so the owner's other devices may drive it (empty = re-locked).
     func userContentController(
         _ userContentController: WKUserContentController,
         didReceive message: WKScriptMessage
     ) {
-        guard message.name == "hkpRuntimeAuth" else { return }
-        var emails: [String] = []
-        if let body = message.body as? [String: Any],
-           let email = body["email"] as? String,
-           !email.isEmpty {
-            emails = [email]
+        switch message.name {
+        // Receives { email } from the web app and updates the embedded runtime's
+        // allow-list so the owner's other devices may drive it (empty = re-locked).
+        case "hkpRuntimeAuth":
+            var emails: [String] = []
+            if let body = message.body as? [String: Any],
+               let email = body["email"] as? String,
+               !email.isEmpty {
+                emails = [email]
+            }
+            HKPRuntimeHost.shared().setLoginUsers(emails)
+
+        // Receives { boards: [String] } and mirrors the names into the App
+        // Group for the share extension's native board picker.
+        case "hkpShareBoards":
+            if let body = message.body as? [String: Any],
+               let boards = body["boards"] as? [String] {
+                ShareInbox.writeBoardsMirror(boards)
+            }
+
+        default:
+            break
         }
-        HKPRuntimeHost.shared().setLoginUsers(emails)
     }
 
     func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
@@ -114,6 +155,10 @@ private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessage
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         NSLog("Meander iOS nav finish: %@", webView.url?.absoluteString ?? "?")
+        // The page (and the injected share bridge) is now live; deliver any
+        // shares captured before the web app was ready (e.g. cold launch from
+        // the share sheet).
+        ShareRouter.shared.webAppDidFinishLoading()
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

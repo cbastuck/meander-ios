@@ -64,9 +64,11 @@ set(SWIFT_SOURCES
     ReadymadeIOS/Features/Boards/BoardListView.swift
     ReadymadeIOS/Features/Boards/BoardListViewModel.swift
     ReadymadeIOS/Features/Boards/JSConsoleBridge.swift
+    ReadymadeIOS/Features/Boards/ShareRouter.swift
     ReadymadeIOS/Models/BoardDraft.swift
     ReadymadeIOS/Models/Remote.swift
     ReadymadeIOS/Networking/MeanderAPIClient.swift
+    ReadymadeIOS/Shared/ShareInbox.swift
 )
 
 set(OBJCXX_SOURCES
@@ -128,6 +130,15 @@ endforeach()
 
 # ── Xcode / bundle properties ─────────────────────────────────────────────────
 set_target_properties(ReadymadeIOS PROPERTIES
+    # Emit a shared .xcscheme for the app so it is always present and selectable
+    # in Xcode. Without this the project ships no scheme files and Xcode
+    # autocreates them per-user; once the Share Extension target was added, that
+    # autocreation surfaced the extension's scheme instead of the app's (the app
+    # target appeared "missing" from the scheme picker). The extension is an
+    # app-extension and can't be run standalone anyway — the app is the only
+    # runnable scheme.
+    XCODE_GENERATE_SCHEME ON
+
     # ── Bundle identity ───────────────────────────────────────────────────────
     MACOSX_BUNDLE_GUI_IDENTIFIER        "com.readymadeit.app-ios"
     MACOSX_BUNDLE_BUNDLE_VERSION        "1"
@@ -227,3 +238,74 @@ target_include_directories(ReadymadeIOS PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/ReadymadeIOS/Runtime
     ${CMAKE_CURRENT_SOURCE_DIR}/ReadymadeIOS/Runtime/Services
 )
+
+# ── Share Extension target ────────────────────────────────────────────────────
+# A separate .appex bundle embedded in the app. It runs in its own process when
+# the user taps "Readymade" in the iOS share sheet: it captures the shared URL
+# and/or text, drops a normalized envelope into the App Group inbox, and opens
+# the host app via readymade://share?id=<id>. ShareInbox.swift is compiled into
+# BOTH targets (the App Group container is their only shared channel).
+add_executable(ReadymadeShareExtension MACOSX_BUNDLE
+    ReadymadeIOS/ShareExtension/ShareViewController.swift
+    ReadymadeIOS/Shared/ShareInbox.swift
+)
+
+set_target_properties(ReadymadeShareExtension PROPERTIES
+    # Make CMake emit an app-extension (.appex) rather than a standalone app.
+    BUNDLE_EXTENSION "appex"
+    XCODE_PRODUCT_TYPE            "com.apple.product-type.app-extension"
+    # An .appex executable is a real Mach-O executable (mh_execute), NOT a
+    # loadable bundle. It has no main() of its own — the entry point is
+    # NSExtensionMain (provided by Foundation), selected with the -e linker
+    # flag. (Setting mh_bundle links without a main but produces a binary the
+    # system cannot posix_spawn → "Exec format error", so the extension flashes
+    # and bounces back to the share sheet.)
+    XCODE_ATTRIBUTE_MACH_O_TYPE  "mh_execute"
+    XCODE_ATTRIBUTE_OTHER_LDFLAGS "-e _NSExtensionMain"
+
+    # Bundle identity: an extension's id must be prefixed by the host app's id.
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.readymadeit.app-ios.ShareExtension"
+    XCODE_ATTRIBUTE_MARKETING_VERSION         "1.0"
+    XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION   "1"
+    MACOSX_BUNDLE_INFO_PLIST
+        "${CMAKE_CURRENT_SOURCE_DIR}/ReadymadeIOS/ShareExtension/Info.plist"
+
+    # Pin the Swift module name so NSExtensionPrincipalClass
+    # (ReadymadeShareExtension.ShareViewController) resolves deterministically.
+    # CMake doesn't set PRODUCT_MODULE_NAME, so relying on $(PRODUCT_MODULE_NAME)
+    # in the Info.plist would expand to empty and the extension would fail to
+    # load (flash, then bounce back to the share sheet).
+    XCODE_ATTRIBUTE_PRODUCT_MODULE_NAME "ReadymadeShareExtension"
+    XCODE_ATTRIBUTE_PRODUCT_NAME        "ReadymadeShareExtension"
+
+    # Swift + deployment settings, mirrored from the app target.
+    XCODE_ATTRIBUTE_SWIFT_VERSION "5.9"
+    "XCODE_ATTRIBUTE_SWIFT_ACTIVE_COMPILATION_CONDITIONS[variant=Debug]"   "DEBUG"
+    "XCODE_ATTRIBUTE_SWIFT_ACTIVE_COMPILATION_CONDITIONS[variant=Release]" "NDEBUG"
+    XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "16.0"
+    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY     "1,2"
+    XCODE_ATTRIBUTE_ARCHS            "arm64"
+    XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH "YES"
+    XCODE_ATTRIBUTE_ENABLE_BITCODE   "NO"
+
+    # Code signing: App Group entitlement so it shares the inbox with the app.
+    XCODE_ATTRIBUTE_CODE_SIGN_STYLE     "Automatic"
+    XCODE_ATTRIBUTE_DEVELOPMENT_TEAM    ""
+    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY  "iPhone Developer"
+    XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/ReadymadeIOS/ShareExtension/ShareExtension.entitlements"
+)
+
+target_link_libraries(ReadymadeShareExtension PRIVATE
+    "-framework Foundation"
+    "-framework UIKit"
+    "-framework UniformTypeIdentifiers"
+)
+
+# Embed and code-sign the extension inside the app's PlugIns folder so it ships
+# as part of ReadymadeIOS.app and registers with the share sheet on install.
+set_target_properties(ReadymadeIOS PROPERTIES
+    XCODE_EMBED_APP_EXTENSIONS                        "ReadymadeShareExtension"
+    XCODE_EMBED_APP_EXTENSIONS_CODE_SIGN_ON_COPY      "YES"
+)
+add_dependencies(ReadymadeIOS ReadymadeShareExtension)
