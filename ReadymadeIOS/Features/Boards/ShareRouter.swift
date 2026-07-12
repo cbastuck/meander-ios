@@ -56,6 +56,10 @@ final class ShareRouter {
     /// after the JS call succeeds, so an item is consumed exactly once even if
     /// both the open-URL and the load-finished paths fire.
     private func deliverPending() {
+        // Payloads whose share was abandoned (picker cancelled, board deleted)
+        // are never fetched+released by the web app; drop old ones here.
+        ShareInbox.sweepStalePayloads()
+
         let items = ShareInbox.pending()
         NSLog("[ReadymadeShare] deliverPending: ready=%@ webView=%@ items=%d",
               webAppReady ? "YES" : "NO", webView == nil ? "nil" : "set", items.count)

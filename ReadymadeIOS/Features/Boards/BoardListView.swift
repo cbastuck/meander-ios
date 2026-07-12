@@ -221,6 +221,8 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             try serveRemotes(for: task, url: url, method: method)
         case "settings":
             serveSettings(for: task, method: method)
+        case "share-files":
+            serveShareFiles(for: task, url: url, method: method)
         case "mint-token":
             serveMintToken(for: task, url: url, method: method)
         default:
@@ -275,6 +277,63 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
                 to: task,
                 statusCode: 405,
                 data: jsonData(["error": "Unsupported settings request"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+    }
+
+    // Binary payloads of shared items (hkp://share-files/<id>). The share
+    // extension stores the bytes in the App Group next to the JSON envelope;
+    // the web app fetches them on demand when it injects the share into a
+    // board (GET) and releases them once consumed (DELETE). Keeping the bytes
+    // out of the envelope avoids pushing megabytes through evaluateJavaScript.
+    private func serveShareFiles(for task: WKURLSchemeTask, url: URL, method: String) {
+        let id = normalizedPath(url.path)
+        guard !id.isEmpty, !id.contains("/"), !id.contains("..") else {
+            respond(
+                to: task,
+                statusCode: 400,
+                data: jsonData(["error": "Missing share file id"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+            return
+        }
+
+        switch method {
+        case "GET":
+            guard let data = ShareInbox.readFilePayload(id: id) else {
+                respond(
+                    to: task,
+                    statusCode: 404,
+                    data: jsonData(["error": "Unknown share file: \(id)"]),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
+                return
+            }
+            respond(
+                to: task,
+                statusCode: 200,
+                data: data,
+                mimeType: "application/octet-stream",
+                headers: apiHeaders
+            )
+        case "DELETE":
+            ShareInbox.removeFilePayload(id: id)
+            respond(
+                to: task,
+                statusCode: 200,
+                data: jsonData(["deleted": id]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        default:
+            respond(
+                to: task,
+                statusCode: 405,
+                data: jsonData(["error": "Unsupported share-files request"]),
                 mimeType: "application/json",
                 headers: apiHeaders
             )

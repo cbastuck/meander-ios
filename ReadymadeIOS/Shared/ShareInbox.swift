@@ -5,6 +5,16 @@ import Foundation
 /// deliberately generic (`url` / `title` / `text` are all optional) so richer
 /// content types — images, files — can be added later without changing the
 /// contract with the web side.
+/// Metadata for a binary payload (image, PDF, any file) that accompanies a
+/// shared item. The bytes themselves are never part of the JSON envelope —
+/// they live as `<id>.payload` next to it and are served to the web app on
+/// demand through the hkp://share-files/<id> route.
+struct SharedFile: Codable {
+    let name: String
+    let mimeType: String
+    let size: Int
+}
+
 struct SharedItem: Codable {
     let id: String
     /// Seconds since the Unix epoch, so both native and JS parse it trivially.
@@ -16,14 +26,23 @@ struct SharedItem: Codable {
     /// skips its in-app picker and runs this board directly; when nil the
     /// in-app picker asks (fallback for stale envelopes / empty board mirror).
     let boardName: String?
+    /// Present when the share carries a binary payload (image/file).
+    let file: SharedFile?
 
-    init(url: String?, title: String?, text: String?, boardName: String? = nil) {
+    init(
+        url: String?,
+        title: String?,
+        text: String?,
+        boardName: String? = nil,
+        file: SharedFile? = nil
+    ) {
         self.id = UUID().uuidString
         self.receivedAt = Date().timeIntervalSince1970
         self.url = url
         self.title = title
         self.text = text
         self.boardName = boardName
+        self.file = file
     }
 }
 
@@ -36,8 +55,15 @@ struct SharedItem: Codable {
 /// cannot reach the app's WebView or its `localStorage` directly.
 enum ShareInbox {
     /// Must match the App Group capability enabled on BOTH the app and the
-    /// extension targets (see the two `.entitlements` files). Keep in sync.
+    /// extension targets (see the `.entitlements` files). Keep in sync. This
+    /// file is compiled into the iOS app + extension AND the macOS share
+    /// extension (meander/macos/ShareExtension), whose host app reads the
+    /// inbox through backend/shareInbox.{h,mm}.
+    #if os(macOS)
+    static let appGroupID = "group.com.readymadeit.app"
+    #else
     static let appGroupID = "group.com.readymadeit.app-ios"
+    #endif
 
     /// Directory holding one `<id>.json` per pending shared item. `nil` only if
     /// the App Group entitlement is missing/misconfigured, which we treat as a
@@ -81,10 +107,63 @@ enum ShareInbox {
     }
 
     /// Remove an item once it has been handed to the web app, so it is consumed
-    /// exactly once.
+    /// exactly once. The binary payload (if any) is NOT removed here — the web
+    /// app fetches it lazily and releases it via removeFilePayload once the
+    /// board has consumed it.
     static func remove(id: String) {
         guard let inbox = inboxURL() else { return }
         try? FileManager.default.removeItem(at: inbox.appendingPathComponent("\(id).json"))
+    }
+
+    // ── Binary payloads ───────────────────────────────────────────────────────
+
+    /// Refuse payloads beyond this size: everything downstream (scheme-handler
+    /// read, webview fetch, pipeline injection) holds the bytes in memory.
+    static let maxFilePayloadBytes = 100 * 1024 * 1024
+
+    static func filePayloadURL(id: String) -> URL? {
+        inboxURL()?.appendingPathComponent("\(id).payload")
+    }
+
+    /// Copies a staged file into the App Group as the payload of item `id`
+    /// (file-to-file copy — the bytes are never loaded into memory here).
+    static func storeFilePayload(from stagedURL: URL, id: String) throws {
+        guard let inbox = inboxURL(), let target = filePayloadURL(id: id) else {
+            throw ShareInboxError.missingAppGroup
+        }
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        try? FileManager.default.removeItem(at: target)
+        try FileManager.default.copyItem(at: stagedURL, to: target)
+    }
+
+    static func readFilePayload(id: String) -> Data? {
+        guard let url = filePayloadURL(id: id) else { return nil }
+        return try? Data(contentsOf: url)
+    }
+
+    static func removeFilePayload(id: String) {
+        guard let url = filePayloadURL(id: id) else { return }
+        try? FileManager.default.removeItem(at: url)
+    }
+
+    /// Deletes payloads that were never consumed (e.g. the user cancelled the
+    /// in-app picker, so nothing ever fetched + released the bytes). Called on
+    /// each inbox drain; anything older than a week is safe to drop.
+    static func sweepStalePayloads(olderThan age: TimeInterval = 7 * 24 * 3600) {
+        guard let inbox = inboxURL(),
+              let urls = try? FileManager.default.contentsOfDirectory(
+                at: inbox, includingPropertiesForKeys: [.contentModificationDateKey],
+                options: [.skipsHiddenFiles]) else {
+            return
+        }
+        let cutoff = Date(timeIntervalSinceNow: -age)
+        for url in urls where url.pathExtension == "payload" {
+            let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                .contentModificationDate ?? .distantPast
+            if modified < cutoff {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
     }
 
     // ── Boards mirror ─────────────────────────────────────────────────────────

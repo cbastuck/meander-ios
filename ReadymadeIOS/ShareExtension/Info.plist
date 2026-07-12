@@ -29,9 +29,9 @@
 		<string>ReadymadeShareExtension.ShareViewController</string>
 		<key>NSExtensionPointIdentifier</key>
 		<string>com.apple.share-services</string>
-		<!-- v1 activates for a single web URL and/or selected text (the Safari
-		     "remember this site / statement" case). Richer types (images,
-		     files) can be added here later. -->
+		<!-- Activates for a single web URL, selected text, or a single
+		     image/movie/file. Binary payloads are capped in code
+		     (ShareInbox.maxFilePayloadBytes). -->
 		<key>NSExtensionAttributes</key>
 		<dict>
 			<key>NSExtensionActivationRule</key>
@@ -40,6 +40,12 @@
 				<integer>1</integer>
 				<key>NSExtensionActivationSupportsText</key>
 				<true/>
+				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsMovieWithMaxCount</key>
+				<integer>1</integer>
+				<key>NSExtensionActivationSupportsFileWithMaxCount</key>
+				<integer>1</integer>
 			</dict>
 		</dict>
 	</dict>
