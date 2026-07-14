@@ -340,6 +340,17 @@ private struct SharePickerView: View {
                         }
                     }
                     .frame(maxHeight: 300)
+
+                    // Same untagged save as the empty state: Readymade's in-app
+                    // picker asks for the board on next open.
+                    Button(action: onSaveWithoutBoard) {
+                        Text("Decide later in Readymade")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 15)
+                    }
                 }
 
                 // The one thing iOS won't let us do is open the app from here —
