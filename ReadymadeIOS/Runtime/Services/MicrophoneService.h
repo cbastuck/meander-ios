@@ -16,7 +16,7 @@ namespace hkp {
 // AVAudioSession + an AVAudioEngine input-node tap instead.
 //
 // Registered only in the iOS embedded runtime (see HKPRuntimeHost), so it is
-// available exclusively in the Meander iOS app. It emits the same payload as
+// available exclusively in the Readymade iOS app. It emits the same payload as
 // core-input — a FloatRingBuffer — so any downstream audio service (fft,
 // monitor, the iOS `speaker`, a websocket-writer, …) consumes it unchanged.
 //

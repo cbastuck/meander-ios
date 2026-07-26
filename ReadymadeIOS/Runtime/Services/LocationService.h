@@ -9,7 +9,7 @@ namespace hkp {
 // Native iOS GPS / location source, backed by CoreLocation.
 //
 // Only registered in the iOS embedded runtime (see HKPRuntimeHost), so it is
-// available exclusively in the Meander iOS app — there is no browser/desktop
+// available exclusively in the Readymade iOS app — there is no browser/desktop
 // equivalent. Mirrors the DeviceMotionService pattern:
 //
 //   - bypass = true by default; un-bypassing starts CoreLocation updates
