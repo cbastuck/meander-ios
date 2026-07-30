@@ -432,10 +432,19 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
 
         switch (method, boardName.isEmpty) {
         case ("GET", true):
+            // "?meta=1" asks for the listing as objects carrying each board's
+            // last-write time instead of bare names.
+            let wantsMetadata = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?
+                .first { $0.name == "meta" }
+                .map { $0.value != "0" } ?? false
+
             respond(
                 to: task,
                 statusCode: 200,
-                data: jsonData(try boardStore.listBoards()),
+                data: wantsMetadata
+                    ? jsonData(try boardStore.listBoardEntries().map { ["name": $0.name, "modified": $0.modified] })
+                    : jsonData(try boardStore.listBoards()),
                 mimeType: "application/json",
                 headers: apiHeaders
             )
@@ -765,19 +774,38 @@ private enum AppBridgeConfig {
 private final class BoardStore {
     private let fileManager = FileManager.default
 
+    /** A saved board with its last-write time as ISO 8601 UTC. */
+    struct BoardEntry {
+        let name: String
+        let modified: String
+    }
+
     func listBoards() throws -> [String] {
+        try listBoardEntries().map(\.name)
+    }
+
+    func listBoardEntries() throws -> [BoardEntry] {
         try ensureBoardsDirectory()
 
         let urls = try fileManager.contentsOfDirectory(
             at: boardsDirectoryURL(),
-            includingPropertiesForKeys: nil,
+            includingPropertiesForKeys: [.contentModificationDateKey],
             options: [.skipsHiddenFiles]
         )
 
+        let formatter = ISO8601DateFormatter()
+
         return urls
             .filter { $0.pathExtension == "json" }
-            .map { $0.deletingPathExtension().lastPathComponent }
-            .sorted()
+            .map { url in
+                let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
+                    .contentModificationDate
+                return BoardEntry(
+                    name: url.deletingPathExtension().lastPathComponent,
+                    modified: modified.map(formatter.string(from:)) ?? ""
+                )
+            }
+            .sorted { $0.name < $1.name }
     }
 
     func loadBoard(named name: String) throws -> Data {
