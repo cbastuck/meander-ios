@@ -1,6 +1,6 @@
 # meander-ios
 
-SwiftUI iOS app that embeds the Meander mobile playground in a `WKWebView` backed by an in-process `hkp-rt` runtime.
+SwiftUI iOS app that embeds the Readymade mobile playground in a `WKWebView` backed by an in-process `hkp-rt` runtime.
 
 ## Building
 
@@ -15,14 +15,14 @@ Use `build-ios.sh` from the **repo root**. It builds the mobile web app first, t
 ```
 
 The script:
-1. Runs `npm run build:ios` in `meander/frontend/` — outputs the mobile web app directly into `MeanderIOS/Resources/WebApp/`
-2. Runs `cmake --preset ios-device` (or `ios-simulator`) — generates `build/meander-ios-device/MeanderIOS.xcodeproj`
+1. Runs `npm run build:ios` in `meander/frontend/` — outputs the mobile web app directly into `ReadymadeIOS/Resources/WebApp/`
+2. Runs `cmake --preset ios-device` (or `ios-simulator`) — generates `build/meander-ios-device/ReadymadeIOS.xcodeproj`
 3. Builds the native target via `cmake --build`
 
 To iterate on the native side without rebuilding the frontend, open the generated project directly:
 
 ```bash
-open build/meander-ios-device/MeanderIOS.xcodeproj
+open build/meander-ios-device/ReadymadeIOS.xcodeproj
 ```
 
 ### Prerequisites
@@ -63,7 +63,7 @@ Built from `meander/frontend/` via `vite.config.ios.ts`. Renders `MobilePlaygrou
 - Safe-area insets on the top bar and bottom tab bar (`env(safe-area-inset-*)`) for Dynamic Island / notch / home indicator
 - `availableRuntimeEngines` populated from `hkp://remotes/` (the embedded runtime appears automatically)
 
-## Configuration (`MeanderIOS/Resources/Info.plist`)
+## Configuration (`ReadymadeIOS/Resources/Info.plist`)
 
 | Key | Default | Purpose |
 |-----|---------|---------|
@@ -79,6 +79,6 @@ Built from `meander/frontend/` via `vite.config.ios.ts`. Renders `MobilePlaygrou
 | Field | Value |
 |-------|-------|
 | Bundle ID | `com.readymadeit.app-ios` |
-| Display name | `Meander` |
+| Display name | `Readymade` |
 | Deployment target | iOS 16.0 |
 | Architecture | arm64 |
