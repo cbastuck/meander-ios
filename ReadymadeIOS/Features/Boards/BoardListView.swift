@@ -172,6 +172,7 @@ private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessage
 
 private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     private let boardStore = BoardStore()
+    private let presetStore = PresetStore()
     private let remoteStore = RemoteStore()
     private let remoteRuntime = RemoteRuntimeBridge(
         remoteName: AppBridgeConfig.runtimeRemoteName,
@@ -217,6 +218,8 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             try serveAppResource(for: url, task: task)
         case "boards":
             try serveBoards(for: task, url: url, method: method)
+        case "presets":
+            try servePresets(for: task, url: url, method: method)
         case "remotes":
             try serveRemotes(for: task, url: url, method: method)
         case "settings":
@@ -496,6 +499,59 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         }
     }
 
+    // The preset library: every file listed unparsed (the web app reads them
+    // and skips what is not a preset), written and deleted by file name.
+    private func servePresets(for task: WKURLSchemeTask, url: URL, method: String) throws {
+        let fileName = normalizedPath(url.path).removingPercentEncoding ?? normalizedPath(url.path)
+
+        switch (method, fileName.isEmpty) {
+        case ("GET", true):
+            respond(
+                to: task,
+                statusCode: 200,
+                data: jsonData(try presetStore.listFiles()),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        case ("POST", false):
+            guard let payload = requestBody(from: task.request) else {
+                respond(
+                    to: task,
+                    statusCode: 400,
+                    data: jsonData(["error": "Missing preset payload"]),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
+                return
+            }
+            try presetStore.write(payload, named: fileName)
+            respond(
+                to: task,
+                statusCode: 200,
+                data: jsonData(["file": fileName]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        case ("DELETE", false):
+            try presetStore.delete(named: fileName)
+            respond(
+                to: task,
+                statusCode: 200,
+                data: jsonData(["file": fileName]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        default:
+            respond(
+                to: task,
+                statusCode: 405,
+                data: jsonData(["error": "Unsupported presets request"]),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+    }
+
     // The embedded runtime, always exposed as a remote reachable in-process
     // through the hkp://remotes/<name> proxy. Not persisted — synthesized on
     // every read so it can never be removed or drift from the live runtime.
@@ -733,6 +789,10 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             return "image/svg+xml"
         case "ttf":
             return "font/ttf"
+        case "wasm":
+            // WebAssembly compiles while it streams in only when served as
+            // what it is; otherwise the page falls back to a slower copy.
+            return "application/wasm"
         default:
             return "application/octet-stream"
         }
@@ -853,6 +913,61 @@ private final class BoardStore {
         }
 
         return trimmed
+    }
+}
+
+/// The preset library: preset files — blocks among them — in Documents/Presets,
+/// one per file as the web app names them, or as whoever put them there did.
+private final class PresetStore {
+    private let fileManager = FileManager.default
+
+    func listFiles() throws -> [[String: String]] {
+        try ensureDirectory()
+        let urls = try fileManager.contentsOfDirectory(
+            at: directoryURL(),
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        return urls
+            .filter { $0.pathExtension == "json" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .compactMap { url in
+                guard let data = try? Data(contentsOf: url),
+                      let source = String(data: data, encoding: .utf8) else {
+                    return nil
+                }
+                return ["file": url.lastPathComponent, "source": source]
+            }
+    }
+
+    func write(_ data: Data, named name: String) throws {
+        let url = try fileURL(named: name)
+        try ensureDirectory()
+        try data.write(to: url, options: .atomic)
+    }
+
+    func delete(named name: String) throws {
+        let url = try fileURL(named: name)
+        if fileManager.fileExists(atPath: url.path) {
+            try fileManager.removeItem(at: url)
+        }
+    }
+
+    private func fileURL(named name: String) throws -> URL {
+        guard name.hasSuffix(".json"), !name.hasPrefix("."),
+              !name.contains("/"), !name.contains("..") else {
+            throw WebShellError.forbiddenPath
+        }
+        return directoryURL().appendingPathComponent(name)
+    }
+
+    private func directoryURL() -> URL {
+        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return documentsURL.appendingPathComponent("Presets", isDirectory: true)
+    }
+
+    private func ensureDirectory() throws {
+        try fileManager.createDirectory(at: directoryURL(), withIntermediateDirectories: true)
     }
 }
 
