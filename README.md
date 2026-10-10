@@ -71,8 +71,8 @@ Built from `meander/frontend/` via `vite.config.ios.ts`. Renders `MobilePlaygrou
 | `HKPRuntimePort` | `5556` | Port the embedded runtime listens on |
 | `HKPRuntimeBaseURL` | `http://127.0.0.1:5556` | Fallback URL if embedded runtime doesn't start |
 | `HKPRuntimeRemoteName` | `meander-ios` | Name shown for the built-in remote |
-| `HKPRuntimeAllowedOrigins` | `*` | CORS origins allowed by the runtime |
-| `DEV_WEBAPP_URL` | `http://127.0.0.1:8555` *(remove for production)* | Load web app from a dev server instead of the bundle. Use `http://127.0.0.1:8555` in the **Simulator** (it reaches the host Mac's vite server and is a secure context, so the cloud view's Auth0/PKCE login works). A LAN IP like `http://192.168.x.x:8555` works for a physical device but is **not** a secure context — `crypto.subtle` is unavailable there, so cloud login breaks, and hkp-frontend's `AuthProvider` strips the `Auth0Provider` on `http://192.168.*`. For device cloud-login testing, serve over HTTPS (tunnel or mkcert) instead. |
+| `HKPRuntimeAllowedOrigins` | `*` | Origins the runtime allows. `*` applies to requests that carry a token; a page calling without one is let in only if it is the app's own (`hkp://app`), is served from the device itself, or — in a Debug build — is the origin of `DEV_WEBAPP_URL` |
+| `DEV_WEBAPP_URL` | `$(DEV_WEBAPP_URL)` — a build setting: `http://127.0.0.1:8555` for the simulator, empty for a device | Debug builds only: load the web app from a dev server instead of the bundle. Empty loads the bundle. The simulator's default reaches the host Mac's Vite server and is a secure context, so the cloud view's Auth0/PKCE login works. A device needs the Mac's LAN address set in Xcode's Build Settings, which `build-ios.sh` resets — see "Loading the web app from a dev server" in the repo's `README-ios.md`. Such an address is **not** a secure context: `crypto.subtle` is unavailable there, so cloud login breaks, and hkp-frontend's `AuthProvider` strips the `Auth0Provider` on `http://192.168.*`. For device cloud-login testing, serve over HTTPS (tunnel or mkcert) instead. |
 
 ## App identity
 

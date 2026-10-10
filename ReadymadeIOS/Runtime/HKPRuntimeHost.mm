@@ -86,6 +86,21 @@ static NSString * const kManualAllowedUsersKey = @"hkpManualAllowedUsers";
 
       _server = std::make_shared<hkp::Server>(_app, "meander-ios", origins, displayName, authConfig);
 
+#ifndef NDEBUG
+      // A development build can load its page from a dev server on another
+      // machine (DEV_WEBAPP_URL, see BoardListView). That page is then a
+      // foreign one to the runtime — which answers the app's own page and
+      // pages served from this device unasked, and no other — so it is named.
+      NSString *devPage = [[NSBundle mainBundle] objectForInfoDictionaryKey:@"DEV_WEBAPP_URL"];
+      NSURLComponents *devURL = devPage.length ? [NSURLComponents componentsWithString:devPage] : nil;
+      if (devURL.scheme.length && devURL.host.length) {
+        NSString *devOrigin = devURL.port
+          ? [NSString stringWithFormat:@"%@://%@:%@", devURL.scheme, devURL.host, devURL.port]
+          : [NSString stringWithFormat:@"%@://%@", devURL.scheme, devURL.host];
+        _server->allowOrigins({std::string([devOrigin.lowercaseString UTF8String])});
+      }
+#endif
+
       // Bind 0.0.0.0 (LAN) or 127.0.0.1 (local-only) based on the user's
       // preference. Chosen once, at start — toggling it needs an app restart.
       std::string bindAddress = [self externalAccessEnabled] ? "0.0.0.0" : "127.0.0.1";
