@@ -6,6 +6,11 @@ private final class ReadymadeIOSAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // Before anything asks for a board: where the library is (iCloud Drive
+        // or this device) is resolved off the main thread, and every request
+        // for a board queues behind it.
+        BoardLibrary.shared.prepare()
+
         // The quick actions are the pinned list's; rebuild them from it, so a
         // pin made or dropped by another process (the widget's configuration
         // reads the same list) is reflected at the next launch.

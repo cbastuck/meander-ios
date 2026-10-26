@@ -61,6 +61,7 @@ endif()
 set(SWIFT_SOURCES
     ReadymadeIOS/App/ReadymadeIOSApp.swift
     ReadymadeIOS/Features/Auth/AuthSessionBridge.swift
+    ReadymadeIOS/Features/Boards/BoardLibrary.swift
     ReadymadeIOS/Features/Boards/BoardListView.swift
     ReadymadeIOS/Features/Boards/BoardListViewModel.swift
     ReadymadeIOS/Features/Boards/JSConsoleBridge.swift
