@@ -84,8 +84,10 @@ private struct MeanderWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
-        // Let the share router push captured shares into this page.
+        // Let the share router push captured shares into this page, and the
+        // launch router tell it a board was launched from outside the app.
         ShareRouter.shared.register(webView: webView)
+        LaunchRouter.shared.register(webView: webView)
 
         if #available(iOS 16.4, *) {
             webView.isInspectable = true
@@ -228,6 +230,8 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             serveShareFiles(for: task, url: url, method: method)
         case "mint-token":
             serveMintToken(for: task, url: url, method: method)
+        case "home-screen":
+            serveHomeScreen(for: task, url: url, method: method)
         default:
             respond(
                 to: task,
@@ -340,6 +344,82 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
                 mimeType: "application/json",
                 headers: apiHeaders
             )
+        }
+    }
+
+    // Boards pinned to the Home Screen (hkp://home-screen/…):
+    //   GET    pins               the pinned list, newest first
+    //   POST   pins               pin { kind, id, title }; iOS cannot place an
+    //                             icon itself, so the answer says "manual"
+    //   DELETE pins/<kind>/<id>   unpin
+    //   POST   launch             take the board a widget, quick action or
+    //                             intent asked to open, once (see LaunchRouter)
+    //   POST   shortcuts          open the Shortcuts app, where a pinned board
+    //                             becomes a Home Screen icon
+    private func serveHomeScreen(for task: WKURLSchemeTask, url: URL, method: String) {
+        let segments = normalizedPath(url.path).split(separator: "/").map {
+            String($0).removingPercentEncoding ?? String($0)
+        }
+
+        func reply(_ statusCode: Int, _ body: Any) {
+            respond(
+                to: task,
+                statusCode: statusCode,
+                data: jsonData(body),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+
+        func encoded(_ pins: [HomeScreenPin]) -> [[String: String]] {
+            pins.map { ["kind": $0.kind, "id": $0.id, "title": $0.title] }
+        }
+
+        switch (method, segments.first ?? "", segments.count) {
+        case ("GET", "pins", 1):
+            reply(200, ["pins": encoded(HomeScreenPins.list())])
+
+        case ("POST", "pins", 1):
+            guard let body = requestBody(from: task.request),
+                  let payload = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
+                  let kind = payload["kind"] as? String,
+                  let id = payload["id"] as? String else {
+                reply(400, ["error": "A pin needs a kind and an id"])
+                return
+            }
+            let title = (payload["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? id
+            do {
+                let pins = try HomeScreenPins.add(HomeScreenPin(kind: kind, id: id, title: title))
+                LaunchRouter.pinsDidChange(pins)
+                reply(200, ["pins": encoded(pins), "homeScreen": "manual"])
+            } catch {
+                reply(400, ["error": error.localizedDescription])
+            }
+
+        case ("DELETE", "pins", 3):
+            do {
+                let pins = try HomeScreenPins.remove(kind: segments[1], id: segments[2])
+                LaunchRouter.pinsDidChange(pins)
+                reply(200, ["pins": encoded(pins)])
+            } catch {
+                reply(500, ["error": error.localizedDescription])
+            }
+
+        case ("POST", "launch", 1):
+            if let target = LaunchRouter.shared.take() {
+                reply(200, ["target": ["kind": target.kind, "id": target.id]])
+            } else {
+                reply(200, ["target": NSNull()])
+            }
+
+        case ("POST", "shortcuts", 1):
+            DispatchQueue.main.async {
+                UIApplication.shared.open(URL(string: "shortcuts://")!)
+            }
+            reply(200, [String: String]())
+
+        default:
+            reply(404, ["error": "Unknown home-screen request: \(method) \(url.absoluteString)"])
         }
     }
 
