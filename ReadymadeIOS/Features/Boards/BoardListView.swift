@@ -69,11 +69,6 @@ private struct MeanderWebView: UIViewRepresentable {
         configuration.userContentController.add(
             context.coordinator, name: "hkpRuntimeAuth")
 
-        // Bridge for the web app to mirror its board names into the App Group,
-        // so the share extension can offer a native board picker.
-        configuration.userContentController.add(
-            context.coordinator, name: "hkpShareBoards")
-
         // Native Auth0 login (ASWebAuthenticationSession + PKCE); the web app
         // awaits the reply of hkpAuth.postMessage({domain, clientId, scheme}).
         configuration.userContentController.addScriptMessageHandler(
@@ -84,8 +79,10 @@ private struct MeanderWebView: UIViewRepresentable {
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
-        // Let the share router push captured shares into this page.
+        // Let the share router push captured shares into this page, and the
+        // launch router tell it a board was launched from outside the app.
         ShareRouter.shared.register(webView: webView)
+        LaunchRouter.shared.register(webView: webView)
 
         if #available(iOS 16.4, *) {
             webView.isInspectable = true
@@ -132,14 +129,6 @@ private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessage
             }
             HKPRuntimeHost.shared().setLoginUsers(emails)
 
-        // Receives { boards: [String] } and mirrors the names into the App
-        // Group for the share extension's native board picker.
-        case "hkpShareBoards":
-            if let body = message.body as? [String: Any],
-               let boards = body["boards"] as? [String] {
-                ShareInbox.writeBoardsMirror(boards)
-            }
-
         default:
             break
         }
@@ -171,7 +160,9 @@ private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessage
 }
 
 private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
-    private let boardStore = BoardStore()
+    private let boards = BoardLibrary.shared
+    private let history = BoardHistoryStore()
+    private let startPageTree = StartPageTreeStore()
     private let presetStore = PresetStore()
     private let remoteStore = RemoteStore()
     private let remoteRuntime = RemoteRuntimeBridge(
@@ -184,7 +175,13 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         "Access-Control-Allow-Headers": "Content-Type",
     ]
 
+    /// Tasks WebKit has started and not stopped. A task answered later, off the
+    /// main thread, is answered only if it is still here: answering a stopped
+    /// task raises an exception.
+    private var liveTasks = Set<ObjectIdentifier>()
+
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
+        liveTasks.insert(ObjectIdentifier(urlSchemeTask))
         do {
             try handle(urlSchemeTask)
         } catch {
@@ -198,7 +195,9 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         }
     }
 
-    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {}
+    func webView(_ webView: WKWebView, stop urlSchemeTask: WKURLSchemeTask) {
+        liveTasks.remove(ObjectIdentifier(urlSchemeTask))
+    }
 
     private func handle(_ task: WKURLSchemeTask) throws {
         guard let url = task.request.url else {
@@ -217,7 +216,11 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         case "app":
             try serveAppResource(for: url, task: task)
         case "boards":
-            try serveBoards(for: task, url: url, method: method)
+            serveBoards(for: task, url: url, method: method)
+        case "history":
+            try serveHistory(for: task, url: url, method: method)
+        case "startpage":
+            try serveStartPage(for: task, method: method)
         case "presets":
             try servePresets(for: task, url: url, method: method)
         case "remotes":
@@ -228,6 +231,8 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             serveShareFiles(for: task, url: url, method: method)
         case "mint-token":
             serveMintToken(for: task, url: url, method: method)
+        case "home-screen":
+            serveHomeScreen(for: task, url: url, method: method)
         default:
             respond(
                 to: task,
@@ -343,6 +348,82 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         }
     }
 
+    // Boards pinned to the Home Screen (hkp://home-screen/…):
+    //   GET    pins               the pinned list, newest first
+    //   POST   pins               pin { kind, id, title }; iOS cannot place an
+    //                             icon itself, so the answer says "manual"
+    //   DELETE pins/<kind>/<id>   unpin
+    //   POST   launch             take the board a widget, quick action or
+    //                             intent asked to open, once (see LaunchRouter)
+    //   POST   shortcuts          open the Shortcuts app, where a pinned board
+    //                             becomes a Home Screen icon
+    private func serveHomeScreen(for task: WKURLSchemeTask, url: URL, method: String) {
+        let segments = normalizedPath(url.path).split(separator: "/").map {
+            String($0).removingPercentEncoding ?? String($0)
+        }
+
+        func reply(_ statusCode: Int, _ body: Any) {
+            respond(
+                to: task,
+                statusCode: statusCode,
+                data: jsonData(body),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+
+        func encoded(_ pins: [HomeScreenPin]) -> [[String: String]] {
+            pins.map { ["kind": $0.kind, "id": $0.id, "title": $0.title] }
+        }
+
+        switch (method, segments.first ?? "", segments.count) {
+        case ("GET", "pins", 1):
+            reply(200, ["pins": encoded(HomeScreenPins.list())])
+
+        case ("POST", "pins", 1):
+            guard let body = requestBody(from: task.request),
+                  let payload = (try? JSONSerialization.jsonObject(with: body)) as? [String: Any],
+                  let kind = payload["kind"] as? String,
+                  let id = payload["id"] as? String else {
+                reply(400, ["error": "A pin needs a kind and an id"])
+                return
+            }
+            let title = (payload["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? id
+            do {
+                let pins = try HomeScreenPins.add(HomeScreenPin(kind: kind, id: id, title: title))
+                LaunchRouter.pinsDidChange(pins)
+                reply(200, ["pins": encoded(pins), "homeScreen": "manual"])
+            } catch {
+                reply(400, ["error": error.localizedDescription])
+            }
+
+        case ("DELETE", "pins", 3):
+            do {
+                let pins = try HomeScreenPins.remove(kind: segments[1], id: segments[2])
+                LaunchRouter.pinsDidChange(pins)
+                reply(200, ["pins": encoded(pins)])
+            } catch {
+                reply(500, ["error": error.localizedDescription])
+            }
+
+        case ("POST", "launch", 1):
+            if let target = LaunchRouter.shared.take() {
+                reply(200, ["target": ["kind": target.kind, "id": target.id]])
+            } else {
+                reply(200, ["target": NSNull()])
+            }
+
+        case ("POST", "shortcuts", 1):
+            DispatchQueue.main.async {
+                UIApplication.shared.open(URL(string: "shortcuts://")!)
+            }
+            reply(200, [String: String]())
+
+        default:
+            reply(404, ["error": "Unknown home-screen request: \(method) \(url.absoluteString)"])
+        }
+    }
+
     // Hierarchical mint-token namespace (hkp://mint-token/<action>). The action
     // names the semantic capability; one is wired today. Add a case as more
     // mint-token actions are introduced.
@@ -430,69 +511,146 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         respond(to: task, statusCode: 200, data: data, mimeType: mimeType(for: fileURL), headers: [:])
     }
 
-    private func serveBoards(for task: WKURLSchemeTask, url: URL, method: String) throws {
+    // The saved boards (hkp://boards/…), in the board library: iCloud Drive
+    // when it is on, the app's Documents otherwise. Answered from the
+    // library's queue, because a board iCloud has not downloaded yet is
+    // downloaded as it is read.
+    private func serveBoards(for task: WKURLSchemeTask, url: URL, method: String) {
         let boardName = normalizedPath(url.path).removingPercentEncoding ?? normalizedPath(url.path)
+        // "?meta=1" asks for the listing as objects carrying each board's
+        // last-write time instead of bare names.
+        let wantsMetadata = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+            .queryItems?
+            .first { $0.name == "meta" }
+            .map { $0.value != "0" } ?? false
+        let payload = method == "POST" ? requestBody(from: task.request) : nil
+        let library = boards
+
+        respondLater(to: task) { [jsonData] in
+            switch (method, boardName.isEmpty) {
+            case ("GET", true):
+                let entries = library.list()
+                return (200, wantsMetadata
+                    ? jsonData(entries.map { ["name": $0.name, "modified": $0.modified] })
+                    : jsonData(entries.map(\.name)))
+            case ("GET", false):
+                return (200, try library.load(boardName))
+            case ("POST", false):
+                guard let payload, !payload.isEmpty else {
+                    return (400, jsonData(["error": "Missing board payload"]))
+                }
+                try library.save(payload, as: boardName)
+                return (200, jsonData(["saved": boardName]))
+            case ("DELETE", false):
+                try library.delete(boardName)
+                return (200, jsonData(["deleted": boardName]))
+            default:
+                return (405, jsonData(["error": "Unsupported boards request"]))
+            }
+        }
+    }
+
+    /// Runs `work` on the board library's queue and answers `task` with what it
+    /// returns, as JSON, on the main thread — unless WebKit stopped the task in
+    /// the meantime. A board that is not there is a 404, any other failure a 500.
+    private func respondLater(
+        to task: WKURLSchemeTask,
+        _ work: @escaping () throws -> (Int, Data)
+    ) {
+        let id = ObjectIdentifier(task)
+        boards.queue.async {
+            let result = Result { try work() }
+            DispatchQueue.main.async {
+                guard self.liveTasks.contains(id) else {
+                    return
+                }
+                let (status, data): (Int, Data)
+                switch result {
+                case .success(let answer):
+                    (status, data) = answer
+                case .failure(BoardLibraryError.notFound(let name)):
+                    (status, data) = (404, self.jsonData(["error": "No board called \(name)"]))
+                case .failure(BoardLibraryError.invalidBoardName):
+                    (status, data) = (400, self.jsonData(["error": "Invalid board name"]))
+                case .failure(let error):
+                    (status, data) = (500, self.jsonData(["error": error.localizedDescription]))
+                }
+                self.respond(
+                    to: task,
+                    statusCode: status,
+                    data: data,
+                    mimeType: "application/json",
+                    headers: self.apiHeaders
+                )
+            }
+        }
+    }
+
+    // A board's history (hkp://history/…), kept on this device:
+    //   GET    history/           every board with one, and its latest time
+    //   GET    history/<board>    the entries, newest first
+    //   POST   history/<board>    push an entry (see BoardHistoryStore)
+    //   DELETE history/<board>    forget it
+    private func serveHistory(for task: WKURLSchemeTask, url: URL, method: String) throws {
+        let boardName = normalizedPath(url.path).removingPercentEncoding ?? normalizedPath(url.path)
+
+        func reply(_ statusCode: Int, _ data: Data) {
+            respond(to: task, statusCode: statusCode, data: data, mimeType: "application/json", headers: apiHeaders)
+        }
 
         switch (method, boardName.isEmpty) {
         case ("GET", true):
-            // "?meta=1" asks for the listing as objects carrying each board's
-            // last-write time instead of bare names.
-            let wantsMetadata = URLComponents(url: url, resolvingAgainstBaseURL: false)?
-                .queryItems?
-                .first { $0.name == "meta" }
-                .map { $0.value != "0" } ?? false
-
-            respond(
-                to: task,
-                statusCode: 200,
-                data: wantsMetadata
-                    ? jsonData(try boardStore.listBoardEntries().map { ["name": $0.name, "modified": $0.modified] })
-                    : jsonData(try boardStore.listBoards()),
-                mimeType: "application/json",
-                headers: apiHeaders
-            )
+            reply(200, jsonData(history.summaries()))
         case ("GET", false):
-            respond(
-                to: task,
-                statusCode: 200,
-                data: try boardStore.loadBoard(named: boardName),
-                mimeType: "application/json",
-                headers: apiHeaders
-            )
+            reply(200, history.load(boardName))
         case ("POST", false):
-            guard let payload = requestBody(from: task.request) else {
+            guard BoardFileName.isValid(boardName), let body = requestBody(from: task.request), !body.isEmpty else {
+                reply(400, jsonData(["error": "A snapshot needs a board name and an entry"]))
+                return
+            }
+            try history.push(body, for: boardName)
+            reply(201, jsonData(["ok": true]))
+        case ("DELETE", false):
+            history.clear(boardName)
+            reply(200, jsonData(["ok": true]))
+        default:
+            reply(405, jsonData(["error": "Unsupported history request"]))
+        }
+    }
+
+    // The board finder's folder tree (hkp://startpage), kept on this device.
+    private func serveStartPage(for task: WKURLSchemeTask, method: String) throws {
+        switch method {
+        case "GET":
+            if let tree = startPageTree.load() {
+                respond(to: task, statusCode: 200, data: tree, mimeType: "application/json", headers: apiHeaders)
+            } else {
+                respond(
+                    to: task,
+                    statusCode: 404,
+                    data: jsonData(["error": "No folder tree yet"]),
+                    mimeType: "application/json",
+                    headers: apiHeaders
+                )
+            }
+        case "POST":
+            guard let body = requestBody(from: task.request), !body.isEmpty else {
                 respond(
                     to: task,
                     statusCode: 400,
-                    data: jsonData(["error": "Missing board payload"]),
+                    data: jsonData(["error": "Missing folder tree"]),
                     mimeType: "application/json",
                     headers: apiHeaders
                 )
                 return
             }
-
-            try boardStore.saveBoard(payload, named: boardName)
-            respond(
-                to: task,
-                statusCode: 200,
-                data: jsonData(["saved": boardName]),
-                mimeType: "application/json",
-                headers: apiHeaders
-            )
-        case ("DELETE", false):
-            try boardStore.deleteBoard(named: boardName)
-            respond(
-                to: task,
-                statusCode: 200,
-                data: jsonData(["deleted": boardName]),
-                mimeType: "application/json",
-                headers: apiHeaders
-            )
+            try startPageTree.save(body)
+            respond(to: task, statusCode: 200, data: jsonData(["ok": true]), mimeType: "application/json", headers: apiHeaders)
         default:
             respond(
                 to: task,
                 statusCode: 405,
-                data: jsonData(["error": "Unsupported boards request"]),
+                data: jsonData(["error": "Unsupported startpage request"]),
                 mimeType: "application/json",
                 headers: apiHeaders
             )
@@ -756,6 +914,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             return
         }
 
+        liveTasks.remove(ObjectIdentifier(task))
         task.didReceive(response)
         task.didReceive(data)
         task.didFinish()
@@ -829,91 +988,6 @@ private enum AppBridgeConfig {
 
         return URL(string: "http://127.0.0.1:5556")!
     }()
-}
-
-private final class BoardStore {
-    private let fileManager = FileManager.default
-
-    /** A saved board with its last-write time as ISO 8601 UTC. */
-    struct BoardEntry {
-        let name: String
-        let modified: String
-    }
-
-    func listBoards() throws -> [String] {
-        try listBoardEntries().map(\.name)
-    }
-
-    func listBoardEntries() throws -> [BoardEntry] {
-        try ensureBoardsDirectory()
-
-        let urls = try fileManager.contentsOfDirectory(
-            at: boardsDirectoryURL(),
-            includingPropertiesForKeys: [.contentModificationDateKey],
-            options: [.skipsHiddenFiles]
-        )
-
-        let formatter = ISO8601DateFormatter()
-
-        return urls
-            .filter { $0.pathExtension == "json" }
-            .map { url in
-                let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?
-                    .contentModificationDate
-                return BoardEntry(
-                    name: url.deletingPathExtension().lastPathComponent,
-                    modified: modified.map(formatter.string(from:)) ?? ""
-                )
-            }
-            .sorted { $0.name < $1.name }
-    }
-
-    func loadBoard(named name: String) throws -> Data {
-        let validatedName = try validate(name)
-        return try Data(contentsOf: boardURL(named: validatedName))
-    }
-
-    func saveBoard(_ data: Data, named name: String) throws {
-        let validatedName = try validate(name)
-        try ensureBoardsDirectory()
-        try data.write(to: boardURL(named: validatedName), options: .atomic)
-    }
-
-    func deleteBoard(named name: String) throws {
-        let validatedName = try validate(name)
-        let url = boardURL(named: validatedName)
-
-        if fileManager.fileExists(atPath: url.path) {
-            try fileManager.removeItem(at: url)
-        }
-    }
-
-    private func boardURL(named name: String) -> URL {
-        boardsDirectoryURL().appendingPathComponent("\(name).json")
-    }
-
-    private func boardsDirectoryURL() -> URL {
-        let documentsURL = fileManager.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        return documentsURL.appendingPathComponent("Boards", isDirectory: true)
-    }
-
-    private func ensureBoardsDirectory() throws {
-        try fileManager.createDirectory(at: boardsDirectoryURL(), withIntermediateDirectories: true)
-    }
-
-    private func validate(_ name: String) throws -> String {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmed.isEmpty else {
-            throw WebShellError.invalidBoardName
-        }
-
-        guard !trimmed.contains("/") && !trimmed.contains("..") else {
-            throw WebShellError.forbiddenPath
-        }
-
-        return trimmed
-    }
 }
 
 /// The preset library: preset files — blocks among them — in Documents/Presets,

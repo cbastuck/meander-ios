@@ -61,13 +61,18 @@ endif()
 set(SWIFT_SOURCES
     ReadymadeIOS/App/ReadymadeIOSApp.swift
     ReadymadeIOS/Features/Auth/AuthSessionBridge.swift
+    ReadymadeIOS/Features/Boards/BoardLibrary.swift
     ReadymadeIOS/Features/Boards/BoardListView.swift
     ReadymadeIOS/Features/Boards/BoardListViewModel.swift
     ReadymadeIOS/Features/Boards/JSConsoleBridge.swift
     ReadymadeIOS/Features/Boards/ShareRouter.swift
+    ReadymadeIOS/Features/HomeScreen/LaunchRouter.swift
+    ReadymadeIOS/Features/HomeScreen/OpenBoardIntent.swift
     ReadymadeIOS/Models/BoardDraft.swift
     ReadymadeIOS/Models/Remote.swift
     ReadymadeIOS/Networking/MeanderAPIClient.swift
+    ReadymadeIOS/Shared/BoardEntity.swift
+    ReadymadeIOS/Shared/HomeScreenPins.swift
     ReadymadeIOS/Shared/ShareInbox.swift
 )
 
@@ -229,6 +234,8 @@ target_link_libraries(ReadymadeIOS PRIVATE
     "-framework CoreFoundation"
     "-framework CoreMotion"
     "-framework CoreLocation"
+    "-framework AppIntents"
+    "-framework WidgetKit"
 )
 
 # ── Header search paths ───────────────────────────────────────────────────────
@@ -302,10 +309,65 @@ target_link_libraries(ReadymadeShareExtension PRIVATE
     "-framework UniformTypeIdentifiers"
 )
 
-# Embed and code-sign the extension inside the app's PlugIns folder so it ships
-# as part of ReadymadeIOS.app and registers with the share sheet on install.
+# ── Widget extension target ───────────────────────────────────────────────────
+# The Readymade widget: a pinned board on the Home Screen, opened with a tap
+# through readymade://board?…. Its own process, like the share extension; it
+# reads the pinned list and the board mirror from the App Group, which is why
+# HomeScreenPins.swift, BoardEntity.swift and ShareInbox.swift are compiled in
+# here as well. Its entry point is the @main WidgetBundle, so unlike the share
+# extension it needs no -e _NSExtensionMain.
+#
+# iOS 17: the widget is configured with an App Intent (AppIntentConfiguration),
+# which iOS 16 does not have. The app itself still runs on iOS 16; there the
+# extension simply does not load, and quick actions and Shortcuts remain.
+add_executable(ReadymadeWidgets MACOSX_BUNDLE
+    ReadymadeIOS/Widget/ReadymadeWidgets.swift
+    ReadymadeIOS/Shared/BoardEntity.swift
+    ReadymadeIOS/Shared/HomeScreenPins.swift
+    ReadymadeIOS/Shared/ShareInbox.swift
+)
+
+set_target_properties(ReadymadeWidgets PROPERTIES
+    BUNDLE_EXTENSION "appex"
+    XCODE_PRODUCT_TYPE            "com.apple.product-type.app-extension"
+    XCODE_ATTRIBUTE_MACH_O_TYPE   "mh_execute"
+
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.readymadeit.app-ios.Widgets"
+    XCODE_ATTRIBUTE_MARKETING_VERSION         "1.0"
+    XCODE_ATTRIBUTE_CURRENT_PROJECT_VERSION   "1"
+    MACOSX_BUNDLE_INFO_PLIST
+        "${CMAKE_CURRENT_SOURCE_DIR}/ReadymadeIOS/Widget/Info.plist"
+    XCODE_ATTRIBUTE_PRODUCT_MODULE_NAME "ReadymadeWidgets"
+    XCODE_ATTRIBUTE_PRODUCT_NAME        "ReadymadeWidgets"
+
+    XCODE_ATTRIBUTE_SWIFT_VERSION "5.9"
+    "XCODE_ATTRIBUTE_SWIFT_ACTIVE_COMPILATION_CONDITIONS[variant=Debug]"   "DEBUG"
+    "XCODE_ATTRIBUTE_SWIFT_ACTIVE_COMPILATION_CONDITIONS[variant=Release]" "NDEBUG"
+    XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "17.0"
+    XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY     "1,2"
+    XCODE_ATTRIBUTE_ARCHS            "arm64"
+    XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH "YES"
+    XCODE_ATTRIBUTE_ENABLE_BITCODE   "NO"
+
+    XCODE_ATTRIBUTE_CODE_SIGN_STYLE     "Automatic"
+    XCODE_ATTRIBUTE_DEVELOPMENT_TEAM    ""
+    XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY  "iPhone Developer"
+    XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS
+        "${CMAKE_CURRENT_SOURCE_DIR}/ReadymadeIOS/Widget/Widget.entitlements"
+)
+
+target_link_libraries(ReadymadeWidgets PRIVATE
+    "-framework Foundation"
+    "-framework SwiftUI"
+    "-framework WidgetKit"
+    "-framework AppIntents"
+)
+
+# Embed and code-sign the extensions inside the app's PlugIns folder so they
+# ship as part of ReadymadeIOS.app and register (share sheet, widget gallery)
+# on install.
 set_target_properties(ReadymadeIOS PROPERTIES
-    XCODE_EMBED_APP_EXTENSIONS                        "ReadymadeShareExtension"
+    XCODE_EMBED_APP_EXTENSIONS                        "ReadymadeShareExtension;ReadymadeWidgets"
     XCODE_EMBED_APP_EXTENSIONS_CODE_SIGN_ON_COPY      "YES"
 )
-add_dependencies(ReadymadeIOS ReadymadeShareExtension)
+add_dependencies(ReadymadeIOS ReadymadeShareExtension ReadymadeWidgets)

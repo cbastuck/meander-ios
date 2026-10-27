@@ -33,6 +33,28 @@
 			</array>
 		</dict>
 	</array>
+	<!-- The board library's iCloud Drive folder, shown as "Readymade" in the
+	     Files app and in Finder. Public scope is what makes it visible; iOS
+	     reads these keys when the bundle version changes, and the scope of a
+	     container is fixed by the first build that uses it. -->
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.readymadeit.readymade</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Readymade</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
+	<!-- Without iCloud Drive, boards stay in the app's Documents; these show
+	     that folder in the Files app under On My iPhone › Readymade. -->
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIApplicationSceneManifest</key>
