@@ -73,6 +73,16 @@ private struct MeanderWebView: UIViewRepresentable {
         // Comment out this line to disable the bridge; see JSConsoleBridge.swift.
         JSConsoleBridge.install(into: configuration)
 
+        // The vault and the grants, for the app's own page only (SecretsPage).
+        // A dev server is one of the app's pages while it is serving the app.
+        #if DEBUG
+        if let devURL = Bundle.main.object(forInfoDictionaryKey: "DEV_WEBAPP_URL") as? String,
+           let url = URL(string: devURL), let scheme = url.scheme, let host = url.host {
+            SecretsPage.ownPages.append("\(scheme)://\(host)\(url.port.map { ":\($0)" } ?? "")")
+        }
+        #endif
+        SecretsPage.install(into: configuration.userContentController)
+
         // Bridge for the web app to push the signed-in user's email to the
         // embedded runtime's auth allow-list (RuntimeUserSync → setRuntimeAllowedUser).
         configuration.userContentController.add(
@@ -181,7 +191,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     private let apiHeaders = [
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers": "Content-Type, \(SecretsPage.tokenHeader)",
     ]
 
     /// Tasks WebKit has started and not stopped. A task answered later, off the
@@ -192,7 +202,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     func webView(_ webView: WKWebView, start urlSchemeTask: WKURLSchemeTask) {
         liveTasks.insert(ObjectIdentifier(urlSchemeTask))
         do {
-            try handle(urlSchemeTask)
+            try handle(urlSchemeTask, webView: webView)
         } catch {
             respond(
                 to: urlSchemeTask,
@@ -208,7 +218,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
         liveTasks.remove(ObjectIdentifier(urlSchemeTask))
     }
 
-    private func handle(_ task: WKURLSchemeTask) throws {
+    private func handle(_ task: WKURLSchemeTask, webView: WKWebView) throws {
         guard let url = task.request.url else {
             respond(to: task, statusCode: 400, data: Data(), mimeType: nil, headers: apiHeaders)
             return
@@ -242,6 +252,8 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
             serveMintToken(for: task, url: url, method: method)
         case "home-screen":
             serveHomeScreen(for: task, url: url, method: method)
+        case "secrets":
+            serveSecrets(for: task, url: url, method: method, webView: webView)
         default:
             respond(
                 to: task,
@@ -430,6 +442,111 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
 
         default:
             reply(404, ["error": "Unknown home-screen request: \(method) \(url.absoluteString)"])
+        }
+    }
+
+    // Secrets (hkp://secrets/…), in the Keychain, for the app's own page only
+    // (see SecretsPage). Names and audiences come back; a value never does —
+    // the page already has every value, from the injection, and a settings
+    // view has no reason to show one.
+    //   GET    values            alias -> hosts it may be sent to
+    //   POST   values/<alias>    { value?, audience? }: whichever is given is
+    //                            set, the other is left as it was
+    //   DELETE values/<alias>
+    //   POST   grants            { key, aliases }: merged into what was granted
+    //   DELETE grants            { key }
+    private func serveSecrets(for task: WKURLSchemeTask, url: URL, method: String, webView: WKWebView) {
+        func reply(_ statusCode: Int, _ body: Any) {
+            respond(
+                to: task,
+                statusCode: statusCode,
+                data: jsonData(body),
+                mimeType: "application/json",
+                headers: apiHeaders
+            )
+        }
+
+        guard task.request.value(forHTTPHeaderField: SecretsPage.tokenHeader) == SecretsPage.token else {
+            reply(403, ["error": "Secrets are kept for the app's own page"])
+            return
+        }
+
+        let vault = DeviceVault.shared
+        let grants = SecretGrants.shared
+        // url.path is already decoded. An alias is limited to what a reference
+        // can express, so there is nothing in one to decode again.
+        let segments = normalizedPath(url.path).split(separator: "/").map(String.init)
+        let payload = requestBody(from: task.request)
+            .flatMap { try? JSONSerialization.jsonObject(with: $0) } as? [String: Any] ?? [:]
+
+        do {
+            switch (method, segments.first ?? "", segments.count) {
+            case ("GET", "values", 1):
+                var audiences: [String: [String]] = [:]
+                for (alias, entry) in vault.all() {
+                    audiences[alias] = entry.audience
+                }
+                reply(200, audiences)
+
+            case ("POST", "values", 2):
+                let alias = segments[1]
+                guard alias.range(of: "^[A-Za-z0-9_.-]+$", options: .regularExpression) != nil else {
+                    reply(400, ["error": "Use letters, digits, dots, hyphens and underscores only"])
+                    return
+                }
+                let value = payload["value"] as? String
+                let audience = payload["audience"] as? [String]
+                guard value != nil || audience != nil else {
+                    reply(400, ["error": "Nothing to set: give a value, an audience or both"])
+                    return
+                }
+                if let value {
+                    guard !value.isEmpty else {
+                        reply(400, ["error": "A secret with no value is the same as not having one"])
+                        return
+                    }
+                    try vault.setValue(value, for: alias)
+                }
+                if let audience {
+                    let constrained = try vault.setAudience(audience, for: alias)
+                    guard constrained else {
+                        reply(404, ["error": "No secret called \(alias)"])
+                        return
+                    }
+                }
+                SecretsPage.install(into: webView.configuration.userContentController)
+                reply(200, ["saved": alias])
+
+            case ("DELETE", "values", 2):
+                // Gone either way, which is what was asked for.
+                _ = vault.delete(segments[1])
+                SecretsPage.install(into: webView.configuration.userContentController)
+                reply(200, ["deleted": segments[1]])
+
+            case ("POST", "grants", 1):
+                guard let key = payload["key"] as? String, !key.isEmpty,
+                      let aliases = payload["aliases"] as? [String] else {
+                    reply(400, ["error": "A grant needs a key and aliases"])
+                    return
+                }
+                try grants.grant(aliases, under: key)
+                SecretsPage.install(into: webView.configuration.userContentController)
+                reply(200, ["granted": key])
+
+            case ("DELETE", "grants", 1):
+                guard let key = payload["key"] as? String, !key.isEmpty else {
+                    reply(400, ["error": "Which grant? Give its key"])
+                    return
+                }
+                try grants.revoke(key)
+                SecretsPage.install(into: webView.configuration.userContentController)
+                reply(200, ["revoked": key])
+
+            default:
+                reply(404, ["error": "Unknown secrets request: \(method) \(url.absoluteString)"])
+            }
+        } catch {
+            reply(500, ["error": error.localizedDescription])
         }
     }
 

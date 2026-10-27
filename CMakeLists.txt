@@ -68,6 +68,7 @@ set(SWIFT_SOURCES
     ReadymadeIOS/Features/Boards/ShareRouter.swift
     ReadymadeIOS/Features/HomeScreen/LaunchRouter.swift
     ReadymadeIOS/Features/HomeScreen/OpenBoardIntent.swift
+    ReadymadeIOS/Features/Secrets/DeviceVault.swift
     ReadymadeIOS/Models/BoardDraft.swift
     ReadymadeIOS/Models/Remote.swift
     ReadymadeIOS/Networking/MeanderAPIClient.swift
