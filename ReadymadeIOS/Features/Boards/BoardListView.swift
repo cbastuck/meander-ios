@@ -16,6 +16,15 @@ private struct MeanderWebView: UIViewRepresentable {
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.setURLSchemeHandler(context.coordinator.schemeHandler, forURLScheme: "hkp")
 
+        // Honour `playsinline`: without this an iPhone WKWebView plays every
+        // video in the fullscreen player. Muted video (the start page's news
+        // teasers) may start on its own; anything with sound still waits for
+        // a tap. Under the default (.all) a teaser's play() was refused on
+        // load but allowed right after any tap — e.g. the back link — and so
+        // jumped fullscreen.
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = .audio
+
         // Inject an unambiguous platform marker before any page JS runs.
         // The web app reads window.__MEANDER_IOS__ instead of sniffing the UA.
         let platformScript = WKUserScript(
