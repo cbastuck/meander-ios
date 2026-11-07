@@ -237,6 +237,8 @@ target_link_libraries(ReadymadeIOS PRIVATE
     "-framework CoreLocation"
     "-framework AppIntents"
     "-framework WidgetKit"
+    "-framework UniformTypeIdentifiers"
+    "-framework UserNotifications"
 )
 
 # ── Header search paths ───────────────────────────────────────────────────────
@@ -308,6 +310,7 @@ target_link_libraries(ReadymadeShareExtension PRIVATE
     "-framework Foundation"
     "-framework UIKit"
     "-framework UniformTypeIdentifiers"
+    "-framework UserNotifications"
 )
 
 # ── Widget extension target ───────────────────────────────────────────────────

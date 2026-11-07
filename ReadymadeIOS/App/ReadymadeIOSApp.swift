@@ -76,8 +76,12 @@ struct ReadymadeIOSApp: App {
                 // Share extension handoff: readymade://share?id=… — the router
                 // drains the App Group inbox into the running web app. Kept as a
                 // best-effort fast path; the reliable pickup is scenePhase below.
+                // A file opened in Readymade ("Open in…" from Files, Mail or
+                // another app) arrives as a file URL and goes the same way.
                 .onOpenURL { url in
-                    if !LaunchRouter.shared.handleOpenURL(url) {
+                    if url.isFileURL {
+                        ShareRouter.shared.handleOpenedFile(url)
+                    } else if !LaunchRouter.shared.handleOpenURL(url) {
                         ShareRouter.shared.handleOpenURL(url)
                     }
                 }
