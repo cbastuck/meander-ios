@@ -167,10 +167,11 @@ enum ShareInbox {
     }
 
     // ── Boards mirror ─────────────────────────────────────────────────────────
-    // The board list lives in the web app's localStorage, which the share
-    // extension cannot read. The app mirrors the board *names* into the App
-    // Group whenever they change, so the extension can offer a native picker
-    // (the WhatsApp pattern: the whole action happens inside the extension).
+    // The board library (BoardLibrary.swift) may be in iCloud Drive, which the
+    // share extension and the widget have no access to. The library writes the
+    // board *names* into the App Group whenever they change, so the extension
+    // can offer a native picker (the WhatsApp pattern: the whole action happens
+    // inside the extension) and the Open Board intent can list them.
 
     private static func boardsMirrorURL() -> URL? {
         guard let container = FileManager.default
@@ -180,8 +181,7 @@ enum ShareInbox {
         return container.appendingPathComponent("boards-mirror.json")
     }
 
-    /// Called by the host app (via the hkpShareBoards message handler) whenever
-    /// the web app reports its current board list.
+    /// Called by the board library whenever its boards change.
     static func writeBoardsMirror(_ names: [String]) {
         guard let url = boardsMirrorURL(),
               let data = try? JSONEncoder().encode(names) else {

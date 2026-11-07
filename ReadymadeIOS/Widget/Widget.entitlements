@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The pinned list and the board mirror live in the App Group. Must match
+	     ShareInbox.appGroupID and the App Group on the app target's
+	     entitlements. -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.readymadeit.app-ios</string>
+	</array>
+</dict>
+</plist>

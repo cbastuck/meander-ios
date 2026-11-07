@@ -13,5 +13,20 @@
 	<array>
 		<string>group.com.readymadeit.app-ios</string>
 	</array>
+	<!-- The board library in iCloud Drive (BoardLibrary.swift). The container
+	     is shared with the desktop app, which reads it as a folder; its id is
+	     permanent once created. -->
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.com.readymadeit.readymade</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudDocuments</string>
+	</array>
+	<key>com.apple.developer.ubiquity-container-identifiers</key>
+	<array>
+		<string>iCloud.com.readymadeit.readymade</string>
+	</array>
 </dict>
 </plist>

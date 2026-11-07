@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 /// The share-sheet entry point for "Share → Readymade". It runs in its own
 /// process, so it cannot touch the host app's WebView or board list. iOS also
@@ -242,8 +243,41 @@ final class ShareViewController: UIViewController {
         } catch {
             NSLog("[ReadymadeShare] inbox write FAILED: %@", error.localizedDescription)
             ShareInbox.removeFilePayload(id: item.id)
+            complete()
+            return
         }
-        complete()
+        // Completed only once the notification is posted: the extension's
+        // process may end as soon as the request completes.
+        notifyOpenInReadymade(id: item.id, boardName: boardName) { [weak self] in
+            self?.complete()
+        }
+    }
+
+    /// An extension cannot bring Readymade to the front, so it posts a local
+    /// notification instead, as Apple recommends: one tap opens the app, which
+    /// drains the inbox as it becomes active. Posted only where the person
+    /// allowed it — the app asks the first time a share reaches it — and
+    /// cleared by the app once it is in front.
+    private func notifyOpenInReadymade(id: String, boardName: String?, then done: @escaping () -> Void) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
+                DispatchQueue.main.async(execute: done)
+                return
+            }
+            let content = UNMutableNotificationContent()
+            content.title = "Open in Readymade"
+            content.body = boardName.map { "Tap to run \($0) with what you shared." }
+                ?? "Tap to choose a board for what you shared."
+            content.threadIdentifier = "readymade-share"
+            let request = UNNotificationRequest(identifier: "readymade-share-\(id)", content: content, trigger: nil)
+            center.add(request) { error in
+                if let error {
+                    NSLog("[ReadymadeShare] notification FAILED: %@", error.localizedDescription)
+                }
+                DispatchQueue.main.async(execute: done)
+            }
+        }
     }
 
     private func complete() {
