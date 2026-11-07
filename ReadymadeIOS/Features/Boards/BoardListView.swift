@@ -379,9 +379,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     //   POST   shortcuts          open the Shortcuts app, where a pinned board
     //                             becomes a Home Screen icon
     private func serveHomeScreen(for task: WKURLSchemeTask, url: URL, method: String) {
-        let segments = normalizedPath(url.path).split(separator: "/").map {
-            String($0).removingPercentEncoding ?? String($0)
-        }
+        let segments = pathSegments(of: url)
 
         func reply(_ statusCode: Int, _ body: Any) {
             respond(
@@ -642,7 +640,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     // library's queue, because a board iCloud has not downloaded yet is
     // downloaded as it is read.
     private func serveBoards(for task: WKURLSchemeTask, url: URL, method: String) {
-        let boardName = normalizedPath(url.path).removingPercentEncoding ?? normalizedPath(url.path)
+        let boardName = pathName(of: url)
         // "?meta=1" asks for the listing as objects carrying each board's
         // last-write time instead of bare names.
         let wantsMetadata = URLComponents(url: url, resolvingAgainstBaseURL: false)?
@@ -718,7 +716,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     //   POST   history/<board>    push an entry (see BoardHistoryStore)
     //   DELETE history/<board>    forget it
     private func serveHistory(for task: WKURLSchemeTask, url: URL, method: String) throws {
-        let boardName = normalizedPath(url.path).removingPercentEncoding ?? normalizedPath(url.path)
+        let boardName = pathName(of: url)
 
         func reply(_ statusCode: Int, _ data: Data) {
             respond(to: task, statusCode: statusCode, data: data, mimeType: "application/json", headers: apiHeaders)
@@ -786,7 +784,7 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
     // The preset library: every file listed unparsed (the web app reads them
     // and skips what is not a preset), written and deleted by file name.
     private func servePresets(for task: WKURLSchemeTask, url: URL, method: String) throws {
-        let fileName = normalizedPath(url.path).removingPercentEncoding ?? normalizedPath(url.path)
+        let fileName = pathName(of: url)
 
         switch (method, fileName.isEmpty) {
         case ("GET", true):
@@ -1058,6 +1056,23 @@ private final class MeanderSchemeHandler: NSObject, WKURLSchemeHandler {
 
     private func normalizedPath(_ path: String) -> String {
         path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    // url.path is already percent-decoded, %2F included, so a name holding
+    // "/" or a literal "%41" cannot be read back from it. The page encodes
+    // each name once (encodeURIComponent); these decode it exactly once.
+
+    /// The rest of the path as one name: a board, a history, a preset file.
+    private func pathName(of url: URL) -> String {
+        let encoded = normalizedPath(url.path(percentEncoded: true))
+        return encoded.removingPercentEncoding ?? encoded
+    }
+
+    /// The path's segments, split while still encoded, each decoded once.
+    private func pathSegments(of url: URL) -> [String] {
+        normalizedPath(url.path(percentEncoded: true)).split(separator: "/").map {
+            String($0).removingPercentEncoding ?? String($0)
+        }
     }
 
     private func mimeType(for url: URL) -> String {
