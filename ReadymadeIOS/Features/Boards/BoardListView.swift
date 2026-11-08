@@ -95,6 +95,9 @@ private struct MeanderWebView: UIViewRepresentable {
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.navigationDelegate = context.coordinator
+        // Without a UI delegate WebKit drops a target="_blank" link and a
+        // window.open() without a word; see the Coordinator.
+        webView.uiDelegate = context.coordinator
         webView.allowsBackForwardNavigationGestures = true
         webView.scrollView.contentInsetAdjustmentBehavior = .never
 
@@ -128,9 +131,65 @@ private struct MeanderWebView: UIViewRepresentable {
     }
 }
 
-private final class Coordinator: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
+private final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     let schemeHandler = MeanderSchemeHandler()
     let authBridge = AuthSessionBridge()
+
+    // MARK: Opening a link elsewhere
+    //
+    // Only the app's own pages load in this view. A web address the person
+    // asked for — a link, target="_blank", window.open() — opens in their
+    // browser instead, as on the desktop (meander/backend/pageTrust.h,
+    // decideNavigation). One a page asks for on its own, a redirect included,
+    // is only refused, so no page can open the browser at will or take the
+    // app's place in its own window.
+
+    private static func isWeb(_ url: URL) -> Bool {
+        url.scheme == "http" || url.scheme == "https"
+    }
+
+    private static func isOwnPage(_ url: URL) -> Bool {
+        guard let scheme = url.scheme, let host = url.host else { return false }
+        let origin = "\(scheme)://\(host)\(url.port.map { ":\($0)" } ?? "")"
+        return SecretsPage.ownPages.contains(origin)
+    }
+
+    /// A new window: never one of ours, so a web address goes to the browser.
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = navigationAction.request.url, Self.isWeb(url) {
+            UIApplication.shared.open(url)
+        }
+        return nil
+    }
+
+    /// The app's window itself, which a link without a target would navigate.
+    /// Frames are left alone: what a board embeds is the board's to load. A
+    /// navigation with no target frame is a new window, answered above.
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard navigationAction.targetFrame?.isMainFrame == true,
+              let url = navigationAction.request.url,
+              Self.isWeb(url),
+              !Self.isOwnPage(url)
+        else {
+            decisionHandler(.allow)
+            return
+        }
+        if navigationAction.navigationType == .linkActivated {
+            UIApplication.shared.open(url)
+        } else {
+            NSLog("Meander iOS: not one of the app's pages, not loaded: %@", url.absoluteString)
+        }
+        decisionHandler(.cancel)
+    }
 
     func userContentController(
         _ userContentController: WKUserContentController,
